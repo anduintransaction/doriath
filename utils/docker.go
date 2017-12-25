@@ -134,6 +134,14 @@ func DockerPush(name, tag string) error {
 	return stacktrace.Propagate(cmd.Run(), "Cannot push docker image")
 }
 
+// DockerRMI removes a docker image
+func DockerRMI(name, tag string) error {
+	cmd := exec.Command("docker", "rmi", name+":"+tag)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return stacktrace.Propagate(cmd.Run(), "Cannot remove docker image")
+}
+
 func getTagListURL(shortName string, credential *DockerCredential) string {
 	var registry string
 	if credential.Registry == "" {

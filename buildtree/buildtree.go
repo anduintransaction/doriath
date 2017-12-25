@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/anduintransaction/doriath/utils"
 	"github.com/palantir/stacktrace"
@@ -146,6 +147,22 @@ func (t *BuildTree) Build() error {
 	return nil
 }
 
+// TryBuild tries to build new images locally, then delete them
+func (t *BuildTree) TryBuild() error {
+	err := utils.DetectRequirement()
+	if err != nil {
+		return err
+	}
+	fmt.Println("Try building new images")
+	for _, node := range t.rootNodes {
+		err = t.tryBuildNodeAndChildren(node)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Push pushes new images to registry
 func (t *BuildTree) Push() error {
 	err := t.Build()
@@ -257,6 +274,31 @@ func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {
 	}
 	for _, child := range node.children {
 		err := t.buildNodeAndChildren(child)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *BuildTree) tryBuildNodeAndChildren(node *buildNode) error {
+	if !node.dirty {
+		fmt.Printf("====> Skipping %s\n", node.name)
+	} else {
+		randomTag := fmt.Sprintf("%s-%d", node.tag, time.Now().UnixNano())
+		fmt.Printf("====> Building %s:%s\n", node.name, randomTag)
+		err := utils.DockerBuild(node.name, randomTag, node.buildRoot)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("====> Removing %s:%s\n", node.name, randomTag)
+		err = utils.DockerRMI(node.name, randomTag)
+		if err != nil {
+			utils.PrintError(err)
+		}
+	}
+	for _, child := range node.children {
+		err := t.tryBuildNodeAndChildren(child)
 		if err != nil {
 			return err
 		}
