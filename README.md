@@ -16,6 +16,9 @@ Check https://github.com/anduintransaction/doriath/releases
 ```yaml
 root_dir: .
 build:
+  - name: "ubuntu"
+    tag: "16.04"
+    from: "provided"
   - name: "human/aragorn"
     from: "./human/aragorn"
     tag: "1.2.0"
@@ -30,6 +33,7 @@ build:
   - name: "elf/elrond"
     from: "./elf/elrond"
     tag: "2.1.0"
+    depend: "ubuntu"
 credentials:
   - name: dockerhub
     username: "$YOUR_USERNAME"

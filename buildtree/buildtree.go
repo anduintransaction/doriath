@@ -82,9 +82,9 @@ func readBuildTree(fileContent []byte) (*BuildTree, error) {
 	for _, buildNodeConfig := range buildConfig.Build {
 		node := &buildNode{
 			buildRoot: utils.ResolveDir(buildConfig.RootDir, buildNodeConfig.From),
-			name:      buildNodeConfig.Name,
+			name:      utils.FormatDockerName(buildNodeConfig.Name),
 			tag:       buildNodeConfig.Tag,
-			depend:    buildNodeConfig.Depend,
+			depend:    utils.FormatDockerName(buildNodeConfig.Depend),
 			children:  []*buildNode{},
 			dirty:     false,
 		}
@@ -221,7 +221,7 @@ func (t *BuildTree) assertDockerfile(node *buildNode) error {
 	if err != nil {
 		return err
 	}
-	if node.depend != imageInfo.FullName {
+	if !utils.CompareDockerName(node.depend, imageInfo.FullName) {
 		return stacktrace.NewError("Mismatch dependency for %q: %q in config but got %q in dockerfile", node.name, node.depend, imageInfo.FullName)
 	}
 	parentTag := t.allNodes[node.depend].tag
@@ -248,7 +248,12 @@ func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty bool) error {
 	if err != nil {
 		return err
 	}
-	if parentIsDirty {
+	if t.isProvided(node) {
+		if !tagExists {
+			return stacktrace.NewError("Cannot find tag %q for provided image %q", node.tag, node.name)
+		}
+		node.dirty = false
+	} else if parentIsDirty {
 		node.dirty = true
 		if tagExists {
 			return stacktrace.NewError("Image needs to be updated but still using old tag: %s", node.name)
@@ -256,6 +261,7 @@ func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty bool) error {
 	} else {
 		node.dirty = !tagExists
 	}
+
 	for _, child := range node.children {
 		err = t.dirtyCheck(child, node.dirty)
 		if err != nil {
@@ -263,6 +269,10 @@ func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty bool) error {
 		}
 	}
 	return nil
+}
+
+func (t *BuildTree) isProvided(node *buildNode) bool {
+	return node.buildRoot == "provided"
 }
 
 func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {

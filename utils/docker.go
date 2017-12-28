@@ -44,6 +44,23 @@ type dockerAuthInfo struct {
 	scope    string
 }
 
+// FormatDockerName adds library/ if possible
+func FormatDockerName(name string) string {
+	if name == "" {
+		return name
+	}
+	segments := strings.Split(name, "/")
+	if len(segments) == 1 {
+		return "library/" + name
+	}
+	return name
+}
+
+// CompareDockerName compares 2 docker image names
+func CompareDockerName(a, b string) bool {
+	return strings.TrimPrefix(a, "library/") == strings.TrimPrefix(b, "library/")
+}
+
 // ExtractDockerImageInfo extracts docker image info
 func ExtractDockerImageInfo(fullnameWithTag string) (*DockerImageInfo, error) {
 	imageInfo := &DockerImageInfo{}
