@@ -245,6 +245,9 @@ func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty bool) error {
 		Username: credential.Username,
 		Password: credential.Password,
 	})
+	if err != nil {
+		return err
+	}
 	if parentIsDirty {
 		node.dirty = true
 		if tagExists {
