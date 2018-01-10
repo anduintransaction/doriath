@@ -258,6 +258,9 @@ func dockerCheckTagSecondRequest(shortName, tag, authType, token string, credent
 		return false, stacktrace.Propagate(err, "Cannot read body of request to %s", tagListURL)
 	}
 	if response.StatusCode != http.StatusOK {
+		if response.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
 		return false, stacktrace.NewError("Unexpected status: %d, response body: %s", response.StatusCode, string(responseBody))
 	}
 	var tagResponse struct {
