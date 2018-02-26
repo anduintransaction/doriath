@@ -15,6 +15,9 @@ Check https://github.com/anduintransaction/doriath/releases
 
 ```yaml
 root_dir: .
+pull:
+  - "ubuntu:16.04"
+  - "centos:7"
 build:
   - name: "ubuntu"
     tag: "16.04"
@@ -22,11 +25,11 @@ build:
   - name: "human/aragorn"
     from: "./human/aragorn"
     tag: "1.2.0"
-    depent: "elf/elrond"
+    depend: "elf/elrond"
   - name: "elf/arwen"
     from: "./elf/arwen"
     tag: "3.1.4"
-    depent: "elf/elrond"
+    depend: "elf/elrond"
   - name: "wizard/gandalf"
     from: "./wizard/gandalf"
     tag: "0.5.2"
@@ -34,12 +37,31 @@ build:
     from: "./elf/elrond"
     tag: "2.1.0"
     depend: "ubuntu"
+    prebuild: "./init-elrond.sh" // Run this script file before building image
+    postbuild: "./finalize-elrond.sh" // Run this script file after building image
+    forcebuild: true // Always build and push this image, skip checking for existance from registry
 credentials:
   - name: dockerhub
-    username: "$YOUR_USERNAME"
-    password: "${YOUR_PASSWORD}"
+    username: "$YOUR_USERNAME" // Use environment variable
+    password: "${YOUR_PASSWORD}" // Here too
   - name: gcr.io
     registry: "https://gcr.io/v2/"
     username: "_json_key"
     password: "**********************"
 ```
+
+# Using variable for configuration file
+
+The config file supports go-template syntax. For example:
+
+```yaml
+root_dir: .
+build:
+  - name: "my-image"
+    tag: "{{.myImageTag}}"
+    from: "./my-image"
+```
+
+Then you can pass the value of `myImageTag` from command line:
+
+`doriath build --variable myImageTag=2.1`

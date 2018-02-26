@@ -1,7 +1,9 @@
 package buildtree
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"os"
@@ -51,28 +53,27 @@ type credentialConfig struct {
 }
 
 // ReadBuildTree reads a build tree from reader
-func ReadBuildTree(r io.Reader) (*BuildTree, error) {
+func ReadBuildTree(r io.Reader, variableMap map[string]string) (*BuildTree, error) {
 	fileContent, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "Cannot read build content")
 	}
-	return readBuildTree(fileContent)
+	return readBuildTree(fileContent, variableMap)
 }
 
 // ReadBuildTreeFromFile reads BuildTree from a build file
-func ReadBuildTreeFromFile(buildFile string) (*BuildTree, error) {
+func ReadBuildTreeFromFile(buildFile string, variableMap map[string]string) (*BuildTree, error) {
 	fileContent, err := ioutil.ReadFile(buildFile)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "Cannot read build file %q", buildFile)
 	}
-	return readBuildTree(fileContent)
+	return readBuildTree(fileContent, variableMap)
 }
 
-func readBuildTree(fileContent []byte) (*BuildTree, error) {
-	buildConfig := &config{}
-	err := yaml.Unmarshal(fileContent, buildConfig)
+func readBuildTree(fileContent []byte, variableMap map[string]string) (*BuildTree, error) {
+	buildConfig, err := readBuildConfig(fileContent, variableMap)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "Cannot decode build file")
+		return nil, err
 	}
 	buildTree := &BuildTree{
 		rootNodes:   []*buildNode{},
@@ -91,11 +92,28 @@ func readBuildTree(fileContent []byte) (*BuildTree, error) {
 		buildTree.allNodes[node.name] = node
 	}
 	for _, credential := range buildConfig.Credentials {
-		credential.Username = os.ExpandEnv(credential.Username)
-		credential.Password = os.ExpandEnv(credential.Password)
 		buildTree.credentials[credential.Name] = credential
 	}
 	return buildTree, nil
+}
+
+func readBuildConfig(fileContent []byte, variableMap map[string]string) (*config, error) {
+	fileContentWithEnvExpanded := os.ExpandEnv(string(fileContent))
+	tmpl, err := template.New("doriath").Parse(fileContentWithEnvExpanded)
+	if err != nil {
+		return nil, err
+	}
+	b := &bytes.Buffer{}
+	err = tmpl.Execute(b, variableMap)
+	if err != nil {
+		return nil, err
+	}
+	buildConfig := &config{}
+	err = yaml.Unmarshal(b.Bytes(), buildConfig)
+	if err != nil {
+		return nil, stacktrace.Propagate(err, "Cannot decode build file")
+	}
+	return buildConfig, nil
 }
 
 // Prepare checks the build tree for error and produces build steps

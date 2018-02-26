@@ -34,7 +34,7 @@ var buildCmd = &cobra.Command{
 	Short: "Build all new images",
 	Long:  "Build all new images",
 	Run: func(cmd *cobra.Command, args []string) {
-		t, err := buildtree.ReadBuildTreeFromFile(cfgFile)
+		t, err := buildtree.ReadBuildTreeFromFile(cfgFile, variableMap)
 		if err != nil {
 			utils.PrintError(err)
 			os.Exit(1)

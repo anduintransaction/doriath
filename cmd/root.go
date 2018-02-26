@@ -23,17 +23,30 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
 var cfgFile string
+var variableArray []string
+var variableMap map[string]string
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
 	Use:   "doriath",
 	Short: "A simple tool to manage docker build graph",
 	Long:  `A simple tool to manage docker build graph`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		for _, variable := range variableArray {
+			segments := strings.SplitN(variable, "=", 2)
+			if len(segments) != 2 {
+				fmt.Fprintf(os.Stderr, "Invalid variable: %s\n", variable)
+				os.Exit(2)
+			}
+			variableMap[segments[0]] = segments[1]
+		}
+	},
 }
 
 // Execute adds all child commands to the root command sets flags appropriately.
@@ -47,4 +60,6 @@ func Execute() {
 
 func init() {
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "doriath.yml", fmt.Sprint("config file (default is 'doriath.yml' in current folder)"))
+	variableMap = make(map[string]string)
+	RootCmd.PersistentFlags().StringArrayVarP(&variableArray, "variable", "x", []string{}, "variables to pass to config file")
 }

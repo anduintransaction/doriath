@@ -34,7 +34,7 @@ var pushCmd = &cobra.Command{
 	Short: "Push all new images to docker registry",
 	Long:  "Push all new images to docker registry",
 	Run: func(cmd *cobra.Command, args []string) {
-		t, err := buildtree.ReadBuildTreeFromFile(cfgFile)
+		t, err := buildtree.ReadBuildTreeFromFile(cfgFile, variableMap)
 		if err != nil {
 			utils.PrintError(err)
 			os.Exit(1)

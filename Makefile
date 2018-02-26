@@ -11,6 +11,8 @@ build:
 install:
 	go install
 
+test: .test-buildtree
+
 clean:
 	rm -rf doriath ${DIST} ${GOPATH}/bin/doriath
 
@@ -33,3 +35,6 @@ dist: clean build .dist-prepare .dist-mac .dist-linux
 	tar czf ${BIN}-`../doriath version`-${OS_LINUX}-${ARCH_LINUX}.tar.gz ${BIN} && \
 	rm ${BIN} && \
 	cd ..
+
+.test-buildtree:
+	go test ./buildtree -v

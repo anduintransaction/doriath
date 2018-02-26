@@ -34,7 +34,7 @@ var trybuildCmd = &cobra.Command{
 	Short: "Try build new images locally, then delete them",
 	Long:  "Try build new images locally, then delete them",
 	Run: func(cmd *cobra.Command, args []string) {
-		t, err := buildtree.ReadBuildTreeFromFile(cfgFile)
+		t, err := buildtree.ReadBuildTreeFromFile(cfgFile, variableMap)
 		if err != nil {
 			utils.PrintError(err)
 			os.Exit(1)
