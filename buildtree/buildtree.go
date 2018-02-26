@@ -24,12 +24,13 @@ type BuildTree struct {
 }
 
 type buildNode struct {
-	buildRoot string
-	name      string
-	tag       string
-	depend    string
-	children  []*buildNode
-	dirty     bool
+	buildRoot  string
+	name       string
+	tag        string
+	depend     string
+	children   []*buildNode
+	dirty      bool
+	forceBuild bool
 }
 
 type config struct {
@@ -39,10 +40,13 @@ type config struct {
 }
 
 type buildNodeConfig struct {
-	Name   string `yaml:"name"`
-	From   string `yaml:"from"`
-	Tag    string `yaml:"tag"`
-	Depend string `yaml:"depend"`
+	Name       string `yaml:"name"`
+	From       string `yaml:"from"`
+	Tag        string `yaml:"tag"`
+	Depend     string `yaml:"depend"`
+	PreBuild   string `yaml:"prebuild"`
+	PostBuild  string `yaml:"postbuild"`
+	ForceBuild bool   `yaml:"forcebuild"`
 }
 
 type credentialConfig struct {
@@ -58,7 +62,7 @@ func ReadBuildTree(r io.Reader, variableMap map[string]string) (*BuildTree, erro
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "Cannot read build content")
 	}
-	return readBuildTree(fileContent, variableMap)
+	return readBuildTree("", fileContent, variableMap)
 }
 
 // ReadBuildTreeFromFile reads BuildTree from a build file
@@ -67,10 +71,10 @@ func ReadBuildTreeFromFile(buildFile string, variableMap map[string]string) (*Bu
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "Cannot read build file %q", buildFile)
 	}
-	return readBuildTree(fileContent, variableMap)
+	return readBuildTree(buildFile, fileContent, variableMap)
 }
 
-func readBuildTree(fileContent []byte, variableMap map[string]string) (*BuildTree, error) {
+func readBuildTree(configFilePath string, fileContent []byte, variableMap map[string]string) (*BuildTree, error) {
 	buildConfig, err := readBuildConfig(fileContent, variableMap)
 	if err != nil {
 		return nil, err
@@ -80,14 +84,16 @@ func readBuildTree(fileContent []byte, variableMap map[string]string) (*BuildTre
 		allNodes:    make(map[string]*buildNode),
 		credentials: make(map[string]*credentialConfig),
 	}
+	configFileFolder := filepath.Dir(configFilePath)
 	for _, buildNodeConfig := range buildConfig.Build {
 		node := &buildNode{
-			buildRoot: utils.ResolveDir(buildConfig.RootDir, buildNodeConfig.From),
-			name:      utils.FormatDockerName(buildNodeConfig.Name),
-			tag:       buildNodeConfig.Tag,
-			depend:    utils.FormatDockerName(buildNodeConfig.Depend),
-			children:  []*buildNode{},
-			dirty:     false,
+			buildRoot:  utils.ResolveDir(filepath.Join(configFileFolder, buildConfig.RootDir), buildNodeConfig.From),
+			name:       utils.FormatDockerName(buildNodeConfig.Name),
+			tag:        buildNodeConfig.Tag,
+			depend:     utils.FormatDockerName(buildNodeConfig.Depend),
+			children:   []*buildNode{},
+			dirty:      false,
+			forceBuild: buildNodeConfig.ForceBuild,
 		}
 		buildTree.allNodes[node.name] = node
 	}
@@ -141,7 +147,7 @@ func (t *BuildTree) Prepare() error {
 		}
 	}
 	for _, node := range t.rootNodes {
-		err := t.dirtyCheck(node, false)
+		err := t.dirtyCheck(node, false, false)
 		if err != nil {
 			return err
 		}
@@ -249,39 +255,44 @@ func (t *BuildTree) assertDockerfile(node *buildNode) error {
 	return nil
 }
 
-func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty bool) error {
-	imageInfo, err := utils.ExtractDockerImageInfo(node.name)
-	if err != nil {
-		return err
-	}
-	credential := t.credentials[imageInfo.RegistryName]
-	if credential == nil {
-		return stacktrace.NewError("Cannot find credential for %s", imageInfo.RegistryName)
-	}
-	tagExists, err := utils.DockerCheckTagExists(imageInfo.ShortName, node.tag, &utils.DockerCredential{
-		Registry: credential.Registry,
-		Username: credential.Username,
-		Password: credential.Password,
-	})
-	if err != nil {
-		return err
-	}
-	if t.isProvided(node) {
-		if !tagExists {
-			return stacktrace.NewError("Cannot find tag %q for provided image %q", node.tag, node.name)
-		}
-		node.dirty = false
-	} else if parentIsDirty {
+func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty, parentIsForced bool) error {
+	if parentIsForced || node.forceBuild == true {
+		node.forceBuild = true
 		node.dirty = true
-		if tagExists {
-			return stacktrace.NewError("Image needs to be updated but still using old tag: %s", node.name)
-		}
 	} else {
-		node.dirty = !tagExists
+		imageInfo, err := utils.ExtractDockerImageInfo(node.name)
+		if err != nil {
+			return err
+		}
+		credential := t.credentials[imageInfo.RegistryName]
+		if credential == nil {
+			return stacktrace.NewError("Cannot find credential for %s", imageInfo.RegistryName)
+		}
+		tagExists, err := utils.DockerCheckTagExists(imageInfo.ShortName, node.tag, &utils.DockerCredential{
+			Registry: credential.Registry,
+			Username: credential.Username,
+			Password: credential.Password,
+		})
+		if err != nil {
+			return err
+		}
+		if t.isProvided(node) {
+			if !tagExists {
+				return stacktrace.NewError("Cannot find tag %q for provided image %q", node.tag, node.name)
+			}
+			node.dirty = false
+		} else if parentIsDirty {
+			node.dirty = true
+			if tagExists {
+				return stacktrace.NewError("Image needs to be updated but still using old tag: %s", node.name)
+			}
+		} else {
+			node.dirty = !tagExists
+		}
 	}
 
 	for _, child := range node.children {
-		err = t.dirtyCheck(child, node.dirty)
+		err := t.dirtyCheck(child, node.dirty, node.forceBuild)
 		if err != nil {
 			return err
 		}
@@ -293,8 +304,12 @@ func (t *BuildTree) isProvided(node *buildNode) bool {
 	return node.buildRoot == "provided"
 }
 
+func (t *BuildTree) needBuild(node *buildNode) bool {
+	return node.dirty || node.forceBuild
+}
+
 func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {
-	if !node.dirty {
+	if !t.needBuild(node) {
 		fmt.Printf("====> Skipping %s\n", node.name)
 	} else {
 		fmt.Printf("====> Building %s:%s\n", node.name, node.tag)
@@ -313,7 +328,7 @@ func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {
 }
 
 func (t *BuildTree) tryBuildNodeAndChildren(node *buildNode) error {
-	if !node.dirty {
+	if !t.needBuild(node) {
 		fmt.Printf("====> Skipping %s\n", node.name)
 	} else {
 		randomTag := fmt.Sprintf("%s-%d", node.tag, time.Now().UnixNano())
@@ -338,7 +353,7 @@ func (t *BuildTree) tryBuildNodeAndChildren(node *buildNode) error {
 }
 
 func (t *BuildTree) pushNodeAndChildren(node *buildNode) error {
-	if !node.dirty {
+	if !t.needBuild(node) {
 		fmt.Printf("====> Skipping %s\n", node.name)
 	} else {
 		fmt.Printf("====> Pushing %s:%s\n", node.name, node.tag)
@@ -361,7 +376,7 @@ func (t *BuildTree) printTree(node *buildNode, level int, noColor bool) {
 	var dirtyPrefix string
 	var dirtyMark string
 	var dirtySuffix string
-	if node.dirty {
+	if t.needBuild(node) {
 		dirtyMark = " (*)"
 		if !noColor {
 			dirtyPrefix = "\033[0;32m"

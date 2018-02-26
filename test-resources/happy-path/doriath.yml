@@ -1,0 +1,38 @@
+root_dir: .
+build:
+  - name: debian
+    tag: 8
+    from: provided
+  - name: ubuntu
+    tag: 16.04
+    from: ./parent1
+    depend: debian
+  - name: alpine
+    tag: 3.5
+    from: ./child1
+    depend: ubuntu
+  - name: busybox
+    tag: 1
+    from: ./grandchild1
+    depend: alpine
+  - name: nginx
+    tag: should-not-exists
+    from: ./child2
+    depend: ubuntu
+  - name: redis
+    tag: should-not-exists
+    from: ./grandchild2
+    depend: nginx
+  - name: postgres
+    tag: 9.6
+    from: ./child3
+    depend: ubuntu
+    forcebuild: true
+  - name: mariadb
+    tag: 10
+    from: ./grandchild3
+    depend: postgres
+credentials:
+  - name: dockerhub
+    username: ${DOCKERHUB_USERNAME}
+    password: ${DOCKERHUB_PASSWORD}

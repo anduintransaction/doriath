@@ -16,6 +16,9 @@ func Version() string {
 
 // ResolveDir appends a path to a rootDir
 func ResolveDir(rootDir, path string) string {
+	if path == "provided" {
+		return "provided"
+	}
 	return filepath.Join(rootDir, path)
 }
 
