@@ -1,0 +1,8 @@
+root_dir: .
+build:
+  - name: node1
+    tag: 1.0
+    from: ./node1
+    prebuild: ./scripts/prebuild.sh
+    postbuild: ./scripts/postbuild.sh
+    forcebuild: true

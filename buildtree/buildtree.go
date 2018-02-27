@@ -18,6 +18,7 @@ import (
 
 // BuildTree is a build tree
 type BuildTree struct {
+	rootDir     string
 	rootNodes   []*buildNode
 	allNodes    map[string]*buildNode
 	credentials map[string]*credentialConfig
@@ -28,6 +29,8 @@ type buildNode struct {
 	name       string
 	tag        string
 	depend     string
+	preBuild   string
+	postBuild  string
 	children   []*buildNode
 	dirty      bool
 	forceBuild bool
@@ -79,18 +82,21 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 	if err != nil {
 		return nil, err
 	}
+	configFileFolder := filepath.Dir(configFilePath)
 	buildTree := &BuildTree{
+		rootDir:     filepath.Join(configFileFolder, buildConfig.RootDir),
 		rootNodes:   []*buildNode{},
 		allNodes:    make(map[string]*buildNode),
 		credentials: make(map[string]*credentialConfig),
 	}
-	configFileFolder := filepath.Dir(configFilePath)
 	for _, buildNodeConfig := range buildConfig.Build {
 		node := &buildNode{
-			buildRoot:  utils.ResolveDir(filepath.Join(configFileFolder, buildConfig.RootDir), buildNodeConfig.From),
+			buildRoot:  utils.ResolveDir(buildTree.rootDir, buildNodeConfig.From),
 			name:       utils.FormatDockerName(buildNodeConfig.Name),
 			tag:        buildNodeConfig.Tag,
 			depend:     utils.FormatDockerName(buildNodeConfig.Depend),
+			preBuild:   buildNodeConfig.PreBuild,
+			postBuild:  buildNodeConfig.PostBuild,
 			children:   []*buildNode{},
 			dirty:      false,
 			forceBuild: buildNodeConfig.ForceBuild,
@@ -313,7 +319,7 @@ func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {
 		fmt.Printf("====> Skipping %s\n", node.name)
 	} else {
 		fmt.Printf("====> Building %s:%s\n", node.name, node.tag)
-		err := utils.DockerBuild(node.name, node.tag, node.buildRoot)
+		err := t.buildNode(node, node.tag)
 		if err != nil {
 			return err
 		}
@@ -333,7 +339,7 @@ func (t *BuildTree) tryBuildNodeAndChildren(node *buildNode) error {
 	} else {
 		randomTag := fmt.Sprintf("%s-%d", node.tag, time.Now().UnixNano())
 		fmt.Printf("====> Building %s:%s\n", node.name, randomTag)
-		err := utils.DockerBuild(node.name, randomTag, node.buildRoot)
+		err := t.buildNode(node, randomTag)
 		if err != nil {
 			return err
 		}
@@ -350,6 +356,30 @@ func (t *BuildTree) tryBuildNodeAndChildren(node *buildNode) error {
 		}
 	}
 	return nil
+}
+
+func (t *BuildTree) buildNode(node *buildNode, tag string) error {
+	if node.preBuild != "" {
+		err := utils.RunShellCommand(t.resolveShellCommandPath(t.rootDir, node.preBuild))
+		if err != nil {
+			return err
+		}
+	}
+	err := utils.DockerBuild(node.name, tag, node.buildRoot)
+	if node.postBuild != "" {
+		utils.RunShellCommand(t.resolveShellCommandPath(t.rootDir, node.postBuild))
+	}
+	return err
+}
+
+func (t *BuildTree) resolveShellCommandPath(buildRoot, command string) string {
+	if strings.HasPrefix(command, "/") {
+		return command
+	}
+	if strings.HasPrefix(command, "./") || strings.HasPrefix(command, "../") {
+		return buildRoot + "/" + command
+	}
+	return command
 }
 
 func (t *BuildTree) pushNodeAndChildren(node *buildNode) error {

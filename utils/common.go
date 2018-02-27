@@ -59,3 +59,11 @@ func (s StringSet) Exists(value string) bool {
 	_, ok := s[value]
 	return ok
 }
+
+// RunShellCommand runs a command under bash shell
+func RunShellCommand(command string) error {
+	cmd := exec.Command("sh", "-c", command)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}

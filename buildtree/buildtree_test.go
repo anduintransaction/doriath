@@ -2,10 +2,12 @@ package buildtree
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"testing"
 
+	"github.com/anduintransaction/doriath/utils"
 	"github.com/palantir/stacktrace"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -76,7 +78,7 @@ credentials:
 }
 
 func (s *BuildTreeTestSuite) TestBuildTreeHappyPath() {
-	if !s.checkIntegTestEnable() {
+	if !s.checkDockerhubTestEnable() {
 		s.T().Log("Skipping test happy path")
 		return
 	}
@@ -189,7 +191,7 @@ func (s *BuildTreeTestSuite) TestMismatchTag() {
 }
 
 func (s *BuildTreeTestSuite) TestMissingProvidedImage() {
-	if !s.checkIntegTestEnable() {
+	if !s.checkDockerhubTestEnable() {
 		s.T().Log("Skipping test missing provided image")
 		return
 	}
@@ -202,7 +204,7 @@ func (s *BuildTreeTestSuite) TestMissingProvidedImage() {
 }
 
 func (s *BuildTreeTestSuite) TestOutdateTag() {
-	if !s.checkIntegTestEnable() {
+	if !s.checkDockerhubTestEnable() {
 		s.T().Log("Skipping test outdate tag")
 		return
 	}
@@ -214,7 +216,26 @@ func (s *BuildTreeTestSuite) TestOutdateTag() {
 	require.True(s.T(), ok)
 }
 
-func (s *BuildTreeTestSuite) checkIntegTestEnable() bool {
+func (s *BuildTreeTestSuite) TestPrePostBuild() {
+	if !s.checkDockerTestEnable() {
+		s.T().Log("Skipping testing pre-post build")
+		return
+	}
+	rootFolder := filepath.Join(s.resourceFolder, "pre-and-post-build")
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	require.Nil(s.T(), err, "build tree must be readable")
+	err = buildTree.Prepare()
+	require.Nil(s.T(), err, "build tree must be able to be prepared")
+	err = buildTree.Build()
+	require.Nil(s.T(), err, "build tree must be able to be built")
+	cmd := exec.Command("docker", "run", "--rm", "node1:1.0")
+	output, err := cmd.Output()
+	require.Nil(s.T(), err, "docker must run successfully")
+	require.Equal(s.T(), "42\n", string(output))
+	utils.RunShellCommand("docker rmi node1:1.0")
+}
+
+func (s *BuildTreeTestSuite) checkDockerhubTestEnable() bool {
 	dockerhubTestEnv := os.Getenv("DOCKERHUB_TEST_ENABLE")
 	if dockerhubTestEnv == "1" || dockerhubTestEnv == "true" {
 		if os.Getenv("DOCKERHUB_USERNAME") == "" {
@@ -226,6 +247,11 @@ func (s *BuildTreeTestSuite) checkIntegTestEnable() bool {
 		return true
 	}
 	return false
+}
+
+func (s *BuildTreeTestSuite) checkDockerTestEnable() bool {
+	dockerTestEnv := os.Getenv("DOCKER_TEST_ENABLE")
+	return dockerTestEnv == "1" || dockerTestEnv == "true"
 }
 
 type buildNodeForTestData struct {
