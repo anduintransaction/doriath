@@ -1,0 +1,13 @@
+root_dir: .
+build:
+  - name: ubuntu
+    tag: should-not-exist
+    from: ./ubuntu
+  - name: alpine
+    tag: edge
+    from: ./alpine
+    depend: ubuntu
+credentials:
+  - name: dockerhub
+    username: ${DOCKERHUB_USERNAME}
+    password: ${DOCKERHUB_PASSWORD}

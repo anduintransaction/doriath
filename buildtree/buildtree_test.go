@@ -6,12 +6,18 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/palantir/stacktrace"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
 type BuildTreeTestSuite struct {
 	suite.Suite
+	resourceFolder string
+}
+
+func (s *BuildTreeTestSuite) SetupTest() {
+	s.resourceFolder = "../test-resources"
 }
 
 func (s *BuildTreeTestSuite) TestReadConfigfile() {
@@ -74,7 +80,7 @@ func (s *BuildTreeTestSuite) TestBuildTreeHappyPath() {
 		s.T().Log("Skipping test happy path")
 		return
 	}
-	rootFolder := "../test-resources/happy-path"
+	rootFolder := filepath.Join(s.resourceFolder, "happy-path")
 	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
 	require.Nil(s.T(), err, "build tree must be readable")
 	err = buildTree.Prepare()
@@ -118,7 +124,7 @@ func (s *BuildTreeTestSuite) TestBuildTreeHappyPath() {
 	expectedChildNode2 := &buildNodeForTestData{
 		buildRoot: filepath.Join(rootFolder, "child2"),
 		name:      "library/nginx",
-		tag:       "should-not-exists",
+		tag:       "should-not-exist",
 		depend:    "library/ubuntu",
 		children:  []string{"library/redis"},
 		dirty:     true,
@@ -127,7 +133,7 @@ func (s *BuildTreeTestSuite) TestBuildTreeHappyPath() {
 	expectedGrandChildNode2 := &buildNodeForTestData{
 		buildRoot: filepath.Join(rootFolder, "grandchild2"),
 		name:      "library/redis",
-		tag:       "should-not-exists",
+		tag:       "should-not-exist",
 		depend:    "library/nginx",
 		children:  []string{},
 		dirty:     true,
@@ -155,9 +161,62 @@ func (s *BuildTreeTestSuite) TestBuildTreeHappyPath() {
 	require.Equal(s.T(), expectedGrandChildNode3, s.convertNodeToTestData(buildTree.allNodes["library/mariadb"]))
 }
 
+func (s *BuildTreeTestSuite) TestCyclicCheck() {
+	rootFolder := filepath.Join(s.resourceFolder, "cyclic-check")
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	require.Nil(s.T(), err, "build tree must be readable")
+	err = buildTree.Prepare()
+	_, ok := stacktrace.RootCause(err).(ErrCyclicDependency)
+	require.True(s.T(), ok)
+}
+
+func (s *BuildTreeTestSuite) TestMismatchImage() {
+	rootFolder := filepath.Join(s.resourceFolder, "mismatch-image")
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	require.Nil(s.T(), err, "build tree must be readable")
+	err = buildTree.Prepare()
+	_, ok := stacktrace.RootCause(err).(ErrMismatchDependencyImage)
+	require.True(s.T(), ok)
+}
+
+func (s *BuildTreeTestSuite) TestMismatchTag() {
+	rootFolder := filepath.Join(s.resourceFolder, "mismatch-tag")
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	require.Nil(s.T(), err, "build tree must be readable")
+	err = buildTree.Prepare()
+	_, ok := stacktrace.RootCause(err).(ErrMismatchDependencyTag)
+	require.True(s.T(), ok)
+}
+
+func (s *BuildTreeTestSuite) TestMissingProvidedImage() {
+	if !s.checkIntegTestEnable() {
+		s.T().Log("Skipping test missing provided image")
+		return
+	}
+	rootFolder := filepath.Join(s.resourceFolder, "missing-provided-image")
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	require.Nil(s.T(), err, "build tree must be readable")
+	err = buildTree.Prepare()
+	_, ok := stacktrace.RootCause(err).(ErrMissingTag)
+	require.True(s.T(), ok)
+}
+
+func (s *BuildTreeTestSuite) TestOutdateTag() {
+	if !s.checkIntegTestEnable() {
+		s.T().Log("Skipping test outdate tag")
+		return
+	}
+	rootFolder := filepath.Join(s.resourceFolder, "outdate-tag")
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	require.Nil(s.T(), err, "build tree must be readable")
+	err = buildTree.Prepare()
+	_, ok := stacktrace.RootCause(err).(ErrImageTagOutdated)
+	require.True(s.T(), ok)
+}
+
 func (s *BuildTreeTestSuite) checkIntegTestEnable() bool {
-	integTestEnv := os.Getenv("INTEG_TEST_ENABLE")
-	if integTestEnv == "1" || integTestEnv == "true" {
+	dockerhubTestEnv := os.Getenv("DOCKERHUB_TEST_ENABLE")
+	if dockerhubTestEnv == "1" || dockerhubTestEnv == "true" {
 		if os.Getenv("DOCKERHUB_USERNAME") == "" {
 			require.Fail(s.T(), "DOCKERHUB_USERNAME was not defined")
 		}

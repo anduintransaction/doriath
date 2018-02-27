@@ -1,0 +1,14 @@
+root_dir: .
+build:
+  - name: node1
+    tag: 1.0
+    from: ./node1
+    depend: node3
+  - name: node2
+    tag: 1.0
+    from: ./node2
+    depend: node1
+  - name: node3
+    tag: 1.0
+    from: ./node3
+    depend: node2

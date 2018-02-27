@@ -1,0 +1,9 @@
+root_dir: .
+build:
+  - name: ubuntu
+    tag: 16.04
+    from: provided
+  - name: node1
+    tag: 1.0
+    from: node1
+    depend: ubuntu

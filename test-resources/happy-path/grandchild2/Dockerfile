@@ -1,1 +1,1 @@
-FROM nginx:should-not-exists
+FROM nginx:should-not-exist

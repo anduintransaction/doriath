@@ -1,0 +1,9 @@
+root_dir: .
+build:
+  - name: ubuntu
+    tag: should-not-exist
+    from: provided
+credentials:
+  - name: dockerhub
+    username: ${DOCKERHUB_USERNAME}
+    password: ${DOCKERHUB_PASSWORD}

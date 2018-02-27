@@ -222,7 +222,7 @@ func (t *BuildTree) cyclicCheck(node *buildNode) error {
 	current := node
 	for {
 		if nodes.Exists(current.name) {
-			return stacktrace.NewError("Cyclic dependency found for %q", current.name)
+			return stacktrace.Propagate(ErrCyclicDependency{current.name}, "Cyclic dependency found for %q", current.name)
 		}
 		nodes.Add(current.name)
 		if current.depend == "" {
@@ -230,7 +230,7 @@ func (t *BuildTree) cyclicCheck(node *buildNode) error {
 		}
 		parent, ok := t.allNodes[current.depend]
 		if !ok {
-			return stacktrace.NewError("Dependency for %q not found: %q", node.name, node.depend)
+			return stacktrace.Propagate(ErrDependencyMissing{node.name, node.depend}, "Dependency for %q not found: %q", node.name, node.depend)
 		}
 		current = parent
 	}
@@ -246,11 +246,11 @@ func (t *BuildTree) assertDockerfile(node *buildNode) error {
 		return err
 	}
 	if !utils.CompareDockerName(node.depend, imageInfo.FullName) {
-		return stacktrace.NewError("Mismatch dependency for %q: %q in config but got %q in dockerfile", node.name, node.depend, imageInfo.FullName)
+		return stacktrace.Propagate(ErrMismatchDependencyImage{node.name, node.depend, imageInfo.FullName}, "Mismatch dependency for %q: %q in config but got %q in dockerfile", node.name, node.depend, imageInfo.FullName)
 	}
 	parentTag := t.allNodes[node.depend].tag
 	if parentTag != imageInfo.Tag {
-		return stacktrace.NewError("Mismatch dependency image tag for %q (parent is %q): %q in config but got %q in dockerfile", node.name, node.depend, parentTag, imageInfo.Tag)
+		return stacktrace.Propagate(ErrMismatchDependencyTag{node.name, node.depend, parentTag, imageInfo.Tag}, "Mismatch dependency image tag for %q (parent is %q): %q in config but got %q in dockerfile", node.name, node.depend, parentTag, imageInfo.Tag)
 	}
 	return nil
 }
@@ -266,7 +266,7 @@ func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty, parentIsForced bo
 		}
 		credential := t.credentials[imageInfo.RegistryName]
 		if credential == nil {
-			return stacktrace.NewError("Cannot find credential for %s", imageInfo.RegistryName)
+			return stacktrace.Propagate(ErrMissingCredential{imageInfo.RegistryName}, "Cannot find credential for %s", imageInfo.RegistryName)
 		}
 		tagExists, err := utils.DockerCheckTagExists(imageInfo.ShortName, node.tag, &utils.DockerCredential{
 			Registry: credential.Registry,
@@ -278,13 +278,13 @@ func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty, parentIsForced bo
 		}
 		if t.isProvided(node) {
 			if !tagExists {
-				return stacktrace.NewError("Cannot find tag %q for provided image %q", node.tag, node.name)
+				return stacktrace.Propagate(ErrMissingTag{node.tag, node.name}, "Cannot find tag %q for provided image %q", node.tag, node.name)
 			}
 			node.dirty = false
 		} else if parentIsDirty {
 			node.dirty = true
 			if tagExists {
-				return stacktrace.NewError("Image needs to be updated but still using old tag: %s", node.name)
+				return stacktrace.Propagate(ErrImageTagOutdated{node.name}, "Image needs to be updated but still using old tag: %q", node.name)
 			}
 		} else {
 			node.dirty = !tagExists
