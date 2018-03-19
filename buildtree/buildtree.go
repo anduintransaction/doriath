@@ -115,6 +115,7 @@ func readBuildConfig(fileContent []byte, variableMap map[string]string) (*config
 	if err != nil {
 		return nil, err
 	}
+	tmpl = tmpl.Option("missingkey=error")
 	b := &bytes.Buffer{}
 	err = tmpl.Execute(b, variableMap)
 	if err != nil {
