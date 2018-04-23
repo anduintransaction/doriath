@@ -1,0 +1,14 @@
+root_dir: .
+build:
+  - name: ubuntu
+    tag: 16.04
+    from: provided
+  - name: anduin/doriath-test
+    tag: 1.1
+    from: ./doriath-test
+    forceBuild: true
+    pushLatest: true
+credentials:
+  - name: dockerhub
+    username: ${DOCKERHUB_USERNAME}
+    password: ${DOCKERHUB_PASSWORD}

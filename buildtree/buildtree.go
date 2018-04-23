@@ -35,6 +35,7 @@ type buildNode struct {
 	children   []*buildNode
 	dirty      bool
 	forceBuild bool
+	pushLatest bool
 }
 
 type config struct {
@@ -51,6 +52,7 @@ type buildNodeConfig struct {
 	PreBuild   string `yaml:"prebuild"`
 	PostBuild  string `yaml:"postbuild"`
 	ForceBuild bool   `yaml:"forcebuild"`
+	PushLatest bool   `yaml:"pushLatest"`
 }
 
 type credentialConfig struct {
@@ -102,6 +104,7 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 			children:   []*buildNode{},
 			dirty:      false,
 			forceBuild: buildNodeConfig.ForceBuild,
+			pushLatest: buildNodeConfig.PushLatest,
 		}
 		buildTree.allNodes[node.name] = node
 	}
@@ -354,6 +357,14 @@ func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {
 		if err != nil {
 			return err
 		}
+		if node.pushLatest {
+			latestTag := "latest"
+			fmt.Printf("====> Building %s:%s\n", node.name, latestTag)
+			err = t.buildNode(node, latestTag)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	for _, child := range node.children {
 		err := t.buildNodeAndChildren(child)
@@ -421,6 +432,14 @@ func (t *BuildTree) pushNodeAndChildren(node *buildNode) error {
 		err := utils.DockerPush(node.name, node.tag)
 		if err != nil {
 			return err
+		}
+		if node.pushLatest {
+			latestTag := "latest"
+			fmt.Printf("====> Pushing %s:%s\n", node.name, latestTag)
+			err := utils.DockerPush(node.name, latestTag)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	for _, child := range node.children {
