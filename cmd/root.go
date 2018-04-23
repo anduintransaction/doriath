@@ -30,6 +30,7 @@ import (
 
 var cfgFile string
 var variableArray []string
+var variableFiles []string
 var variableMap map[string]string
 
 // RootCmd represents the base command when called without any subcommands
@@ -61,5 +62,6 @@ func Execute() {
 func init() {
 	RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "doriath.yml", fmt.Sprint("config file (default is 'doriath.yml' in current folder)"))
 	variableMap = make(map[string]string)
-	RootCmd.PersistentFlags().StringArrayVarP(&variableArray, "variable", "x", []string{}, "variables to pass to config file")
+	RootCmd.PersistentFlags().StringArrayVar(&variableArray, "variable", []string{}, "variables to pass to config file")
+	RootCmd.PersistentFlags().StringArrayVar(&variableFiles, "variableFile", []string{}, "variable files")
 }

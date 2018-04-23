@@ -36,7 +36,7 @@ var dryrunCmd = &cobra.Command{
 	Short: "Check your project for build steps and possible error",
 	Long:  "Check your project for build steps and possible error",
 	Run: func(cmd *cobra.Command, args []string) {
-		t, err := buildtree.ReadBuildTreeFromFile(cfgFile, variableMap)
+		t, err := buildtree.ReadBuildTreeFromFile(cfgFile, variableMap, variableFiles)
 		if err != nil {
 			utils.PrintError(err)
 			os.Exit(1)

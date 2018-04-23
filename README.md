@@ -65,3 +65,13 @@ build:
 Then you can pass the value of `myImageTag` from command line:
 
 `doriath build --variable myImageTag=2.1`
+
+Or using variable file:
+
+`doriath build --variableFile varFile`
+
+Sample varFile:
+
+```
+myImageTag=2.1
+```

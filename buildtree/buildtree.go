@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/anduintransaction/doriath/utils"
+	"github.com/joho/godotenv"
 	"github.com/palantir/stacktrace"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -60,25 +61,25 @@ type credentialConfig struct {
 }
 
 // ReadBuildTree reads a build tree from reader
-func ReadBuildTree(r io.Reader, variableMap map[string]string) (*BuildTree, error) {
+func ReadBuildTree(r io.Reader, variableMap map[string]string, variableFiles []string) (*BuildTree, error) {
 	fileContent, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "Cannot read build content")
 	}
-	return readBuildTree("", fileContent, variableMap)
+	return readBuildTree("", fileContent, variableMap, variableFiles)
 }
 
 // ReadBuildTreeFromFile reads BuildTree from a build file
-func ReadBuildTreeFromFile(buildFile string, variableMap map[string]string) (*BuildTree, error) {
+func ReadBuildTreeFromFile(buildFile string, variableMap map[string]string, variableFiles []string) (*BuildTree, error) {
 	fileContent, err := ioutil.ReadFile(buildFile)
 	if err != nil {
 		return nil, stacktrace.Propagate(err, "Cannot read build file %q", buildFile)
 	}
-	return readBuildTree(buildFile, fileContent, variableMap)
+	return readBuildTree(buildFile, fileContent, variableMap, variableFiles)
 }
 
-func readBuildTree(configFilePath string, fileContent []byte, variableMap map[string]string) (*BuildTree, error) {
-	buildConfig, err := readBuildConfig(fileContent, variableMap)
+func readBuildTree(configFilePath string, fileContent []byte, variableMap map[string]string, variableFiles []string) (*BuildTree, error) {
+	buildConfig, err := readBuildConfig(fileContent, variableMap, variableFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,19 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 	return buildTree, nil
 }
 
-func readBuildConfig(fileContent []byte, variableMap map[string]string) (*config, error) {
+func readBuildConfig(fileContent []byte, variableMap map[string]string, variableFiles []string) (*config, error) {
+	variablesFromFiles := make(map[string]string)
+	var err error
+	if len(variableFiles) > 0 {
+		variablesFromFiles, err = godotenv.Read(variableFiles...)
+		if err != nil {
+			return nil, stacktrace.Propagate(err, "cannot read variable files")
+		}
+	}
+	allVars := variablesFromFiles
+	for k, v := range variableMap {
+		allVars[k] = v
+	}
 	fileContentWithEnvExpanded := os.ExpandEnv(string(fileContent))
 	tmpl, err := template.New("doriath").Parse(fileContentWithEnvExpanded)
 	if err != nil {
@@ -117,7 +130,7 @@ func readBuildConfig(fileContent []byte, variableMap map[string]string) (*config
 	}
 	tmpl = tmpl.Option("missingkey=error")
 	b := &bytes.Buffer{}
-	err = tmpl.Execute(b, variableMap)
+	err = tmpl.Execute(b, allVars)
 	if err != nil {
 		return nil, err
 	}

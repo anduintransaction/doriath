@@ -27,7 +27,7 @@ func (s *BuildTreeTestSuite) TestReadConfigfile() {
 root_dir: .
 build:
   - name: "ubuntu"
-    tag: "16.04"
+    tag: "{{.ubuntuTag}}"
     from: "provided"
   - name: "human/aragorn"
     tag: "{{.aragornTag}}"
@@ -46,7 +46,10 @@ credentials:
 	variables := map[string]string{
 		"aragornTag": "3.1.4",
 	}
-	buildConfig, err := readBuildConfig([]byte(fileContent), variables)
+	variableFiles := []string{
+		filepath.Join(s.resourceFolder, "vars", "vars"),
+	}
+	buildConfig, err := readBuildConfig([]byte(fileContent), variables, variableFiles)
 	require.Nil(s.T(), err, "read build config should be successful")
 	require.Equal(s.T(), ".", buildConfig.RootDir)
 	expectedBuilds := []*buildNodeConfig{
@@ -83,7 +86,7 @@ func (s *BuildTreeTestSuite) TestBuildTreeHappyPath() {
 		return
 	}
 	rootFolder := filepath.Join(s.resourceFolder, "happy-path")
-	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{}, nil)
 	require.Nil(s.T(), err, "build tree must be readable")
 	err = buildTree.Prepare()
 	require.Nil(s.T(), err, "build tree should be able to be prepared")
@@ -165,7 +168,7 @@ func (s *BuildTreeTestSuite) TestBuildTreeHappyPath() {
 
 func (s *BuildTreeTestSuite) TestCyclicCheck() {
 	rootFolder := filepath.Join(s.resourceFolder, "cyclic-check")
-	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{}, nil)
 	require.Nil(s.T(), err, "build tree must be readable")
 	err = buildTree.Prepare()
 	_, ok := stacktrace.RootCause(err).(ErrCyclicDependency)
@@ -174,7 +177,7 @@ func (s *BuildTreeTestSuite) TestCyclicCheck() {
 
 func (s *BuildTreeTestSuite) TestMismatchImage() {
 	rootFolder := filepath.Join(s.resourceFolder, "mismatch-image")
-	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{}, nil)
 	require.Nil(s.T(), err, "build tree must be readable")
 	err = buildTree.Prepare()
 	_, ok := stacktrace.RootCause(err).(ErrMismatchDependencyImage)
@@ -183,7 +186,7 @@ func (s *BuildTreeTestSuite) TestMismatchImage() {
 
 func (s *BuildTreeTestSuite) TestMismatchTag() {
 	rootFolder := filepath.Join(s.resourceFolder, "mismatch-tag")
-	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{}, nil)
 	require.Nil(s.T(), err, "build tree must be readable")
 	err = buildTree.Prepare()
 	_, ok := stacktrace.RootCause(err).(ErrMismatchDependencyTag)
@@ -196,7 +199,7 @@ func (s *BuildTreeTestSuite) TestMissingProvidedImage() {
 		return
 	}
 	rootFolder := filepath.Join(s.resourceFolder, "missing-provided-image")
-	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{}, nil)
 	require.Nil(s.T(), err, "build tree must be readable")
 	err = buildTree.Prepare()
 	_, ok := stacktrace.RootCause(err).(ErrMissingTag)
@@ -209,7 +212,7 @@ func (s *BuildTreeTestSuite) TestOutdateTag() {
 		return
 	}
 	rootFolder := filepath.Join(s.resourceFolder, "outdate-tag")
-	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{}, nil)
 	require.Nil(s.T(), err, "build tree must be readable")
 	err = buildTree.Prepare()
 	_, ok := stacktrace.RootCause(err).(ErrImageTagOutdated)
@@ -222,7 +225,7 @@ func (s *BuildTreeTestSuite) TestPrePostBuild() {
 		return
 	}
 	rootFolder := filepath.Join(s.resourceFolder, "pre-and-post-build")
-	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{})
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{}, nil)
 	require.Nil(s.T(), err, "build tree must be readable")
 	err = buildTree.Prepare()
 	require.Nil(s.T(), err, "build tree must be able to be prepared")
