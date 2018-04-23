@@ -41,8 +41,12 @@ credentials:
     registry: "https://gcr.io/v2/"
     username: "username"
     password: "${TEST_PASSWORD}"
+  - name: dockerhub
+    username: "username"
+    passwordFile: ${TEST_PASSWORD_FILE}
 `
 	os.Setenv("TEST_PASSWORD", "testpassword")
+	os.Setenv("TEST_PASSWORD_FILE", filepath.Join(s.resourceFolder, "credentials", "password"))
 	variables := map[string]string{
 		"aragornTag": "3.1.4",
 	}
@@ -69,12 +73,23 @@ credentials:
 		},
 	}
 	require.Equal(s.T(), expectedBuilds, buildConfig.Build)
+	for i := range buildConfig.Credentials {
+		resolvedCredential, err := resolveCredential(buildConfig.Credentials[i], buildConfig.RootDir)
+		require.Nil(s.T(), err)
+		buildConfig.Credentials[i] = resolvedCredential
+	}
 	expectedCredentials := []*credentialConfig{
 		&credentialConfig{
 			Name:     "gcr.io",
 			Registry: "https://gcr.io/v2/",
 			Username: "username",
 			Password: "testpassword",
+		},
+		&credentialConfig{
+			Name:         "dockerhub",
+			Username:     "username",
+			Password:     "rivendell",
+			PasswordFile: filepath.Join(s.resourceFolder, "credentials", "password"),
 		},
 	}
 	require.Equal(s.T(), expectedCredentials, buildConfig.Credentials)

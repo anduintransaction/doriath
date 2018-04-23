@@ -54,10 +54,11 @@ type buildNodeConfig struct {
 }
 
 type credentialConfig struct {
-	Name     string `yaml:"name"`
-	Registry string `yaml:"registry"`
-	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	Name         string `yaml:"name"`
+	Registry     string `yaml:"registry"`
+	Username     string `yaml:"username"`
+	Password     string `yaml:"password"`
+	PasswordFile string `yaml:"passwordFile"`
 }
 
 // ReadBuildTree reads a build tree from reader
@@ -105,7 +106,11 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 		buildTree.allNodes[node.name] = node
 	}
 	for _, credential := range buildConfig.Credentials {
-		buildTree.credentials[credential.Name] = credential
+		resolvedCredential, err := resolveCredential(credential, buildTree.rootDir)
+		if err != nil {
+			return nil, err
+		}
+		buildTree.credentials[credential.Name] = resolvedCredential
 	}
 	return buildTree, nil
 }
@@ -140,6 +145,18 @@ func readBuildConfig(fileContent []byte, variableMap map[string]string, variable
 		return nil, stacktrace.Propagate(err, "Cannot decode build file")
 	}
 	return buildConfig, nil
+}
+
+func resolveCredential(credential *credentialConfig, rootDir string) (*credentialConfig, error) {
+	if credential.PasswordFile != "" {
+		passwordFile := utils.ResolveDir(rootDir, credential.PasswordFile)
+		content, err := ioutil.ReadFile(passwordFile)
+		if err != nil {
+			return nil, stacktrace.Propagate(err, "cannot read password file %q", passwordFile)
+		}
+		credential.Password = strings.TrimSpace(string(content))
+	}
+	return credential, nil
 }
 
 // Prepare checks the build tree for error and produces build steps
