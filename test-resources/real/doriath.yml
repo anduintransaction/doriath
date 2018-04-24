@@ -1,14 +1,12 @@
 root_dir: .
 build:
-  - name: ubuntu
-    tag: 16.04
-    from: provided
-  - name: anduin/doriath-test
+  - name: gcr.io/anduintransact/doriath-test
     tag: 1.1
     from: ./doriath-test
-    forceBuild: true
-    pushLatest: true
+    force_build: true
+    push_latest: true
 credentials:
-  - name: dockerhub
-    username: ${DOCKERHUB_USERNAME}
-    password: ${DOCKERHUB_PASSWORD}
+  - name: gcr.io
+    registry: https://gcr.io
+    username: ${GCR_USERNAME}
+    password_file: ${GCR_PASSWORD}

@@ -29,8 +29,8 @@ func (s *IntegTestSuite) TestBuildPush() {
 	require.Nil(s.T(), err, "build tree must be able to be prepared")
 	err = buildTree.Push()
 	require.Nil(s.T(), err, "build tree must be able to be built")
-	utils.RunShellCommand("docker rmi anduin/doriath-test:1.1")
-	utils.RunShellCommand("docker rmi anduin/doriath-test:latest")
+	utils.DockerRMI("anduin/doriath-test", "1.1")
+	utils.DockerRMI("anduin/doriath-test", "latest")
 }
 
 func TestInteg(t *testing.T) {

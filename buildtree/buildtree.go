@@ -49,10 +49,10 @@ type buildNodeConfig struct {
 	From       string `yaml:"from"`
 	Tag        string `yaml:"tag"`
 	Depend     string `yaml:"depend"`
-	PreBuild   string `yaml:"prebuild"`
-	PostBuild  string `yaml:"postbuild"`
-	ForceBuild bool   `yaml:"forcebuild"`
-	PushLatest bool   `yaml:"pushLatest"`
+	PreBuild   string `yaml:"pre_build"`
+	PostBuild  string `yaml:"post_build"`
+	ForceBuild bool   `yaml:"force_build"`
+	PushLatest bool   `yaml:"push_latest"`
 }
 
 type credentialConfig struct {
@@ -60,7 +60,7 @@ type credentialConfig struct {
 	Registry     string `yaml:"registry"`
 	Username     string `yaml:"username"`
 	Password     string `yaml:"password"`
-	PasswordFile string `yaml:"passwordFile"`
+	PasswordFile string `yaml:"password_file"`
 }
 
 // ReadBuildTree reads a build tree from reader
@@ -233,7 +233,7 @@ func (t *BuildTree) Push() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Logging in to registry")
+	fmt.Println("Logging into registry")
 	for _, credential := range t.credentials {
 		err = utils.DockerLogin(credential.Registry, credential.Username, credential.Password)
 		if err != nil {
@@ -248,6 +248,23 @@ func (t *BuildTree) Push() error {
 		}
 	}
 	return nil
+}
+
+// FindLatestTag .
+func (t *BuildTree) FindLatestTag(name string) (string, error) {
+	imageInfo, err := utils.ExtractDockerImageInfo(name)
+	if err != nil {
+		return "", err
+	}
+	credential := t.credentials[imageInfo.RegistryName]
+	if credential == nil {
+		return "", stacktrace.Propagate(ErrMissingCredential{imageInfo.RegistryName}, "Cannot find credential for %s", imageInfo.RegistryName)
+	}
+	return utils.DockerFindLatestTag(imageInfo, &utils.DockerCredential{
+		Username: credential.Username,
+		Registry: credential.Registry,
+		Password: credential.Password,
+	})
 }
 
 // PrintTree prints the build tree

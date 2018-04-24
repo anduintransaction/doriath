@@ -15,9 +15,10 @@ import (
 	"github.com/palantir/stacktrace"
 )
 
+// Default values
 const (
 	DefaultRegistryName = "dockerhub"
-	DefaultRegistry     = "https://registry-1.docker.io/v2"
+	DefaultRegistry     = "https://registry-1.docker.io"
 )
 
 var fromRegex = regexp.MustCompile("^[fF][rR][oO][mM]\\s+")
@@ -115,7 +116,7 @@ func DockerCheckTagExists(shortName, tag string, credential *DockerCredential) (
 	if err != nil {
 		return false, err
 	}
-	token, err := dockerRequestToken(authInfo, credential)
+	token, err := dockerRequestToken(shortName, authInfo, credential)
 	if err != nil {
 		return false, err
 	}
@@ -159,6 +160,28 @@ func DockerRMI(name, tag string) error {
 	return stacktrace.Propagate(cmd.Run(), "Cannot remove docker image")
 }
 
+// DockerFindLatestTag .
+func DockerFindLatestTag(imageInfo *DockerImageInfo, credential *DockerCredential) (string, error) {
+	switch credential.Registry {
+	case "https://gcr.io":
+		return dockerFindGCRLatestTag(imageInfo, credential)
+	default:
+		return "", stacktrace.NewError("registry not supported: %q", credential.Registry)
+	}
+}
+
+func dockerFindGCRLatestTag(imageInfo *DockerImageInfo, credential *DockerCredential) (string, error) {
+	authInfo, err := dockerCheckTagFirstRequest(imageInfo.ShortName, credential)
+	if err != nil {
+		return "", err
+	}
+	token, err := dockerRequestToken(imageInfo.ShortName, authInfo, credential)
+	if err != nil {
+		return "", err
+	}
+	return dockerFindLatestTag(imageInfo, authInfo.authType, token, credential)
+}
+
 func getTagListURL(shortName string, credential *DockerCredential) string {
 	var registry string
 	if credential.Registry == "" {
@@ -166,21 +189,24 @@ func getTagListURL(shortName string, credential *DockerCredential) string {
 	} else {
 		registry = credential.Registry
 	}
-	return registry + "/" + shortName + "/tags/list"
+	return registry + "/v2/" + shortName + "/tags/list"
 }
 
 func dockerCheckTagFirstRequest(shortName string, credential *DockerCredential) (*dockerAuthInfo, error) {
-	tagListURL := getTagListURL(shortName, credential)
-	request, err := http.NewRequest("GET", tagListURL, nil)
+	return dockerFirstRequest(getTagListURL(shortName, credential), credential)
+}
+
+func dockerFirstRequest(url string, credential *DockerCredential) (*dockerAuthInfo, error) {
+	request, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "Cannot create tag list request to %s", tagListURL)
+		return nil, stacktrace.Propagate(err, "Cannot create request to %s", url)
 	}
 	response, err := http.DefaultTransport.RoundTrip(request)
 	if err != nil {
-		return nil, stacktrace.Propagate(err, "Cannot make http request to %s", tagListURL)
+		return nil, stacktrace.Propagate(err, "Cannot make http request to %s", url)
 	}
 	if response.StatusCode != http.StatusUnauthorized {
-		return nil, stacktrace.NewError("Unexpected status code for request to %s: got %d", tagListURL, response.StatusCode)
+		return nil, stacktrace.NewError("Unexpected status code for request to %s: got %d", url, response.StatusCode)
 	}
 	authHeaderContent := response.Header.Get("Www-Authenticate")
 	if authHeaderContent == "" {
@@ -211,10 +237,12 @@ func dockerCheckTagFirstRequest(shortName string, credential *DockerCredential) 
 	return authInfo, nil
 }
 
-func dockerRequestToken(authInfo *dockerAuthInfo, credential *DockerCredential) (string, error) {
+func dockerRequestToken(shortName string, authInfo *dockerAuthInfo, credential *DockerCredential) (string, error) {
 	tokenQueryParams := url.Values{}
 	tokenQueryParams.Add("service", authInfo.service)
-	tokenQueryParams.Add("scope", authInfo.scope)
+	if authInfo.scope == "" {
+		tokenQueryParams.Add("scope", "repository:"+shortName+":*")
+	}
 	tokenURL := authInfo.realm + "?" + tokenQueryParams.Encode()
 	request, err := http.NewRequest("GET", tokenURL, nil)
 	if err != nil {
@@ -278,4 +306,55 @@ func dockerCheckTagSecondRequest(shortName, tag, authType, token string, credent
 		}
 	}
 	return found, nil
+}
+
+type gcrTagList struct {
+	Manifest map[string]*gcrManifest `json:"manifest"`
+}
+
+type gcrManifest struct {
+	Tag []string `json:"tag"`
+}
+
+func dockerFindLatestTag(imageInfo *DockerImageInfo, authType, token string, credential *DockerCredential) (string, error) {
+	tagListURL := getTagListURL(imageInfo.ShortName, credential)
+	request, err := http.NewRequest("GET", tagListURL, nil)
+	if err != nil {
+		return "", stacktrace.Propagate(err, "Cannot create request to %s", tagListURL)
+	}
+	request.Header.Add("Authorization", authType+" "+token)
+	request.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+	response, err := http.DefaultTransport.RoundTrip(request)
+	if err != nil {
+		return "", stacktrace.Propagate(err, "Cannot make request to %s", tagListURL)
+	}
+	responseBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return "", stacktrace.Propagate(err, "Cannot read body of request to %s", tagListURL)
+	}
+	if response.StatusCode != http.StatusOK {
+		return "", stacktrace.NewError("Unexpected status: %d, response body: %s", response.StatusCode, string(responseBody))
+	}
+	tagList := &gcrTagList{}
+	err = json.Unmarshal(responseBody, tagList)
+	if err != nil {
+		return "", stacktrace.Propagate(err, "cannot decode json %s", string(responseBody))
+	}
+	for _, tagInfo := range tagList.Manifest {
+		foundLatestTag := false
+		for _, tag := range tagInfo.Tag {
+			if tag == "latest" {
+				foundLatestTag = true
+				break
+			}
+		}
+		if foundLatestTag {
+			for _, tag := range tagInfo.Tag {
+				if tag != "latest" {
+					return tag, nil
+				}
+			}
+		}
+	}
+	return "", stacktrace.NewError("cannot find latest tag")
 }

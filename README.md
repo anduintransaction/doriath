@@ -37,10 +37,10 @@ build:
     from: "./elf/elrond"
     tag: "2.1.0"
     depend: "ubuntu"
-    prebuild: "./init-elrond.sh" // Run this script file before building image
-    postbuild: "./finalize-elrond.sh" // Run this script file after building image
-    forcebuild: true // Always build and push this image, skip checking for existance from registry
-    pushLatest: true // also push this tag as "latest"
+    pre_build: "./init-elrond.sh" // Run this script file before building image
+    post_build: "./finalize-elrond.sh" // Run this script file after building image
+    force_build: true // Always build and push this image, skip checking for existance from registry
+    push_latest: true // also push this tag as "latest"
 credentials:
   - name: dockerhub
     username: "$YOUR_USERNAME" // Use environment variable
@@ -48,7 +48,7 @@ credentials:
   - name: gcr.io
     registry: "https://gcr.io/v2/"
     username: "_json_key"
-    passwordFile: "credential.json" // Use password from a file content
+    password_file: "credential.json" // Use password from a file content
 ```
 
 # Using variable for configuration file

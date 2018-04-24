@@ -33,10 +33,10 @@ build:
     tag: "{{.aragornTag}}"
     from: "./human/aragorn"
     depend: "ubuntu"
-    prebuild: "./init.sh"
-    postbuild: "./finalize.sh"
-    forcebuild: true
-    pushLatest: true
+    pre_build: "./init.sh"
+    post_build: "./finalize.sh"
+    force_build: true
+    push_latest: true
 credentials:
   - name: gcr.io
     registry: "https://gcr.io/v2/"
@@ -44,7 +44,7 @@ credentials:
     password: "${TEST_PASSWORD}"
   - name: dockerhub
     username: "username"
-    passwordFile: ${TEST_PASSWORD_FILE}
+    password_file: ${TEST_PASSWORD_FILE}
 `
 	os.Setenv("TEST_PASSWORD", "testpassword")
 	os.Setenv("TEST_PASSWORD_FILE", filepath.Join(s.resourceFolder, "credentials", "password"))

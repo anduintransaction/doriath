@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/palantir/stacktrace"
 )
@@ -18,6 +19,9 @@ func Version() string {
 func ResolveDir(rootDir, path string) string {
 	if path == "provided" {
 		return "provided"
+	}
+	if strings.HasPrefix(path, "/") {
+		return path
 	}
 	return filepath.Join(rootDir, path)
 }

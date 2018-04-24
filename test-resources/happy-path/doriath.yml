@@ -27,7 +27,7 @@ build:
     tag: 9.6
     from: ./child3
     depend: ubuntu
-    forcebuild: true
+    force_build: true
   - name: mariadb
     tag: 10
     from: ./grandchild3
