@@ -18,7 +18,7 @@ import (
 // Default values
 const (
 	DefaultRegistryName = "dockerhub"
-	DefaultRegistry     = "https://registry-1.docker.io"
+	DefaultRegistry     = "https://registry.hub.docker.com"
 )
 
 var fromRegex = regexp.MustCompile("^[fF][rR][oO][mM]\\s+")
@@ -242,6 +242,8 @@ func dockerRequestToken(shortName string, authInfo *dockerAuthInfo, credential *
 	tokenQueryParams.Add("service", authInfo.service)
 	if authInfo.scope == "" {
 		tokenQueryParams.Add("scope", "repository:"+shortName+":*")
+	} else {
+		tokenQueryParams.Add("scope", authInfo.scope)
 	}
 	tokenURL := authInfo.realm + "?" + tokenQueryParams.Encode()
 	request, err := http.NewRequest("GET", tokenURL, nil)
