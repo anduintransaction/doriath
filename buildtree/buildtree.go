@@ -267,6 +267,18 @@ func (t *BuildTree) FindLatestTag(name string) (string, error) {
 	})
 }
 
+// Clean .
+func (t *BuildTree) Clean() {
+	for _, node := range t.allNodes {
+		if node.buildRoot != "provided" {
+			err := utils.DockerRMI(node.name, node.tag)
+			if err != nil {
+				utils.PrintError(err)
+			}
+		}
+	}
+}
+
 // PrintTree prints the build tree
 func (t *BuildTree) PrintTree(noColor bool) {
 	for _, node := range t.rootNodes {
