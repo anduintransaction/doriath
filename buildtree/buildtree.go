@@ -201,7 +201,7 @@ func (t *BuildTree) Build() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Building new images")
+	utils.Info("Building new images")
 	for _, node := range t.rootNodes {
 		err = t.buildNodeAndChildren(node)
 		if err != nil {
@@ -217,7 +217,7 @@ func (t *BuildTree) TryBuild() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Try building new images")
+	utils.Info("Try building new images")
 	for _, node := range t.rootNodes {
 		err = t.tryBuildNodeAndChildren(node)
 		if err != nil {
@@ -233,14 +233,14 @@ func (t *BuildTree) Push() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Logging into registry")
+	utils.Info("Logging into registry")
 	for _, credential := range t.credentials {
 		err = utils.DockerLogin(credential.Registry, credential.Username, credential.Password)
 		if err != nil {
 			return err
 		}
 	}
-	fmt.Println("Pushing new images")
+	utils.Info("Pushing new images")
 	for _, node := range t.rootNodes {
 		err = t.pushNodeAndChildren(node)
 		if err != nil {
@@ -273,7 +273,7 @@ func (t *BuildTree) Clean() {
 		if node.buildRoot != "provided" {
 			err := utils.DockerRMI(node.name, node.tag)
 			if err != nil {
-				utils.PrintError(err)
+				utils.Error(err)
 			}
 		}
 	}
@@ -379,16 +379,16 @@ func (t *BuildTree) needBuild(node *buildNode) bool {
 
 func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {
 	if !t.needBuild(node) {
-		fmt.Printf("====> Skipping %s\n", node.name)
+		utils.Info2("====> Skipping %s", node.name)
 	} else {
-		fmt.Printf("====> Building %s:%s\n", node.name, node.tag)
+		utils.Info2("====> Building %s:%s", node.name, node.tag)
 		err := t.buildNode(node, node.tag)
 		if err != nil {
 			return err
 		}
 		if node.pushLatest {
 			latestTag := "latest"
-			fmt.Printf("====> Building %s:%s\n", node.name, latestTag)
+			utils.Info2("====> Building %s:%s", node.name, latestTag)
 			err = t.buildNode(node, latestTag)
 			if err != nil {
 				return err
@@ -406,18 +406,18 @@ func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {
 
 func (t *BuildTree) tryBuildNodeAndChildren(node *buildNode) error {
 	if !t.needBuild(node) {
-		fmt.Printf("====> Skipping %s\n", node.name)
+		utils.Info2("====> Skipping %s", node.name)
 	} else {
 		randomTag := fmt.Sprintf("%s-%d", node.tag, time.Now().UnixNano())
-		fmt.Printf("====> Building %s:%s\n", node.name, randomTag)
+		utils.Info2("====> Building %s:%s", node.name, randomTag)
 		err := t.buildNode(node, randomTag)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("====> Removing %s:%s\n", node.name, randomTag)
+		utils.Info2("====> Removing %s:%s", node.name, randomTag)
 		err = utils.DockerRMI(node.name, randomTag)
 		if err != nil {
-			utils.PrintError(err)
+			utils.Error(err)
 		}
 	}
 	for _, child := range node.children {
@@ -455,16 +455,16 @@ func (t *BuildTree) resolveShellCommandPath(buildRoot, command string) string {
 
 func (t *BuildTree) pushNodeAndChildren(node *buildNode) error {
 	if !t.needBuild(node) {
-		fmt.Printf("====> Skipping %s\n", node.name)
+		utils.Info2("====> Skipping %s", node.name)
 	} else {
-		fmt.Printf("====> Pushing %s:%s\n", node.name, node.tag)
+		utils.Info2("====> Pushing %s:%s", node.name, node.tag)
 		err := utils.DockerPush(node.name, node.tag)
 		if err != nil {
 			return err
 		}
 		if node.pushLatest {
 			latestTag := "latest"
-			fmt.Printf("====> Pushing %s:%s\n", node.name, latestTag)
+			utils.Info2("====> Pushing %s:%s", node.name, latestTag)
 			err := utils.DockerPush(node.name, latestTag)
 			if err != nil {
 				return err

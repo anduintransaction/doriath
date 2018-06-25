@@ -38,12 +38,12 @@ Currently, only images hosted in gcr.io are supported by this command.
 	Run: func(cmd *cobra.Command, args []string) {
 		t, err := buildtree.ReadBuildTreeFromFile(cfgFile, variableMap, variableFiles)
 		if err != nil {
-			utils.PrintError(err)
+			utils.Error(err)
 			os.Exit(1)
 		}
 		tag, err := t.FindLatestTag(args[0])
 		if err != nil {
-			utils.PrintError(err)
+			utils.Error(err)
 			os.Exit(1)
 		}
 		fmt.Println(tag)

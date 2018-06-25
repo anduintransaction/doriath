@@ -38,12 +38,12 @@ var dryrunCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		t, err := buildtree.ReadBuildTreeFromFile(cfgFile, variableMap, variableFiles)
 		if err != nil {
-			utils.PrintError(err)
+			utils.Error(err)
 			os.Exit(1)
 		}
 		err = t.Prepare()
 		if err != nil {
-			utils.PrintError(err)
+			utils.Error(err)
 			os.Exit(1)
 		}
 		t.PrintTree(dryrunNoColor)
