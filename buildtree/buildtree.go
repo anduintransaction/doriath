@@ -374,7 +374,7 @@ func (t *BuildTree) isProvided(node *buildNode) bool {
 }
 
 func (t *BuildTree) needBuild(node *buildNode) bool {
-	return node.dirty || node.forceBuild
+	return !t.isProvided(node) && (node.dirty || node.forceBuild)
 }
 
 func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {
