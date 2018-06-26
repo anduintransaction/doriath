@@ -115,7 +115,6 @@ func RetryWithFixedDelay(delay time.Duration, retries int, f func() error) error
 		if err == nil {
 			return nil
 		}
-		Warn("Got error %s, will retry in %s", err, delay)
 		time.Sleep(delay)
 	}
 	return err
