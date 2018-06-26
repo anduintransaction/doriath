@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/palantir/stacktrace"
@@ -12,7 +13,7 @@ import (
 
 // Version returns doriath version
 func Version() string {
-	return "1.4.4"
+	return "1.4.5"
 }
 
 // ResolveDir appends a path to a rootDir
@@ -104,4 +105,18 @@ func RunShellCommand(command string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// RetryWithFixedDelay .
+func RetryWithFixedDelay(delay time.Duration, retries int, f func() error) error {
+	var err error
+	for i := 0; i < retries; i++ {
+		err = f()
+		if err == nil {
+			return nil
+		}
+		Warn("Got error %s, will retry in %s", err, delay)
+		time.Sleep(delay)
+	}
+	return err
 }

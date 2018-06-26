@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/palantir/stacktrace"
 )
@@ -158,6 +159,24 @@ func DockerRMI(name, tag string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return stacktrace.Propagate(cmd.Run(), "Cannot remove docker image")
+}
+
+// DockerTryRMI removes a docker image if exists, and will retry if necessary
+func DockerTryRMI(name, tag string) error {
+	return RetryWithFixedDelay(5*time.Second, 20, func() error {
+		cmd := exec.Command("docker", "rmi", name+":"+tag)
+		errOutput := &bytes.Buffer{}
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = errOutput
+		err := cmd.Run()
+		if err == nil {
+			return nil
+		}
+		if strings.Contains(errOutput.String(), "No such image") {
+			return nil
+		}
+		return stacktrace.NewError("Cannot remove docker image: %s", errOutput.String())
+	})
 }
 
 // DockerFindLatestTag .

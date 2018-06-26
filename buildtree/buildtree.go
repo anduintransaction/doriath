@@ -271,7 +271,8 @@ func (t *BuildTree) FindLatestTag(name string) (string, error) {
 func (t *BuildTree) Clean() {
 	for _, node := range t.allNodes {
 		if node.buildRoot != "provided" {
-			err := utils.DockerRMI(node.name, node.tag)
+			utils.Info("====> Removing docker image %s:%s", node.name, node.tag)
+			err := utils.DockerTryRMI(node.name, node.tag)
 			if err != nil {
 				utils.Error(err)
 			}
