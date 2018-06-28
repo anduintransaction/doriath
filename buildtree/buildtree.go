@@ -276,6 +276,13 @@ func (t *BuildTree) Clean() {
 			if err != nil {
 				utils.Error(err)
 			}
+			if node.pushLatest {
+				utils.Info("====> Removing docker image %s:%s", node.name, "latest")
+				err = utils.DockerTryRMI(node.name, "latest")
+				if err != nil {
+					utils.Error(err)
+				}
+			}
 		}
 	}
 }
