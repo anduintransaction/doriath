@@ -124,6 +124,19 @@ func DockerCheckTagExists(shortName, tag string, credential *DockerCredential) (
 	return dockerCheckTagSecondRequest(shortName, tag, authInfo.authType, token, credential)
 }
 
+// DockerImageExistsOnLocal .
+func DockerImageExistsOnLocal(fullname string) (bool, error) {
+	cmd := exec.Command("docker", "images", "-q", fullname)
+	output, err := cmd.Output()
+	if err != nil {
+		return false, stacktrace.Propagate(err, "Cannot check image on local: %s", fullname)
+	}
+	if len(output) == 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
 // DockerLogin logins to docker registry
 func DockerLogin(host, username, password string) error {
 	var cmd *exec.Cmd
@@ -147,6 +160,13 @@ func DockerBuild(name, tag, buildRoot string) error {
 
 // DockerPull .
 func DockerPull(fullname string) error {
+	existed, err := DockerImageExistsOnLocal(fullname)
+	if err != nil {
+		return err
+	}
+	if existed {
+		return nil
+	}
 	cmd := exec.Command("docker", "pull", fullname)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
