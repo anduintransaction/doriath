@@ -44,6 +44,11 @@ var buildCmd = &cobra.Command{
 			utils.Error(err)
 			os.Exit(1)
 		}
+		err = t.Pull()
+		if err != nil {
+			utils.Error(err)
+			os.Exit(1)
+		}
 		err = t.Build()
 		if err != nil {
 			utils.Error(err)

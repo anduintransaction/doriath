@@ -20,6 +20,7 @@ import (
 // BuildTree is a build tree
 type BuildTree struct {
 	rootDir     string
+	pull        []string
 	rootNodes   []*buildNode
 	allNodes    map[string]*buildNode
 	credentials map[string]*credentialConfig
@@ -40,6 +41,7 @@ type buildNode struct {
 
 type config struct {
 	RootDir     string              `yaml:"root_dir"`
+	Pull        []string            `yaml:"pull"`
 	Build       []*buildNodeConfig  `yaml:"build"`
 	Credentials []*credentialConfig `yaml:"credentials"`
 }
@@ -89,6 +91,7 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 	configFileFolder := filepath.Dir(configFilePath)
 	buildTree := &BuildTree{
 		rootDir:     filepath.Join(configFileFolder, buildConfig.RootDir),
+		pull:        buildConfig.Pull,
 		rootNodes:   []*buildNode{},
 		allNodes:    make(map[string]*buildNode),
 		credentials: make(map[string]*credentialConfig),
@@ -188,6 +191,18 @@ func (t *BuildTree) Prepare() error {
 	}
 	for _, node := range t.rootNodes {
 		err := t.dirtyCheck(node, false, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Pull .
+func (t *BuildTree) Pull() error {
+	for _, image := range t.pull {
+		utils.Info("Pulling image %s", image)
+		err := utils.DockerPull(image)
 		if err != nil {
 			return err
 		}

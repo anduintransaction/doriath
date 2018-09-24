@@ -145,6 +145,14 @@ func DockerBuild(name, tag, buildRoot string) error {
 	return stacktrace.Propagate(cmd.Run(), "Cannot build docker image")
 }
 
+// DockerPull .
+func DockerPull(fullname string) error {
+	cmd := exec.Command("docker", "pull", fullname)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return stacktrace.Propagate(cmd.Run(), "Cannot pull docker image")
+}
+
 // DockerPush pushes a docker image
 func DockerPush(name, tag string) error {
 	cmd := exec.Command("docker", "push", name+":"+tag)
