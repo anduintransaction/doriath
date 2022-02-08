@@ -174,8 +174,13 @@ func DockerPull(fullname string) error {
 }
 
 // DockerPush pushes a docker image
-func DockerPush(name, tag string) error {
-	cmd := exec.Command("docker", "push", name+":"+tag)
+func DockerPush(name, tag, buildRoot string, platforms []string) error {
+	var cmd *exec.Cmd
+	if len(platforms) == 0 {
+		cmd = exec.Command("docker", "push", name+":"+tag)
+	} else {
+		cmd = exec.Command("docker", "buildx", "build", "--platform", strings.Join(platforms, ","), "-t", name+":"+tag, "--push", buildRoot)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return stacktrace.Propagate(cmd.Run(), "Cannot push docker image")

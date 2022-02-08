@@ -37,6 +37,7 @@ type buildNode struct {
 	dirty      bool
 	forceBuild bool
 	pushLatest bool
+	platforms  []string
 }
 
 type config struct {
@@ -47,14 +48,15 @@ type config struct {
 }
 
 type buildNodeConfig struct {
-	Name       string `yaml:"name"`
-	From       string `yaml:"from"`
-	Tag        string `yaml:"tag"`
-	Depend     string `yaml:"depend"`
-	PreBuild   string `yaml:"pre_build"`
-	PostBuild  string `yaml:"post_build"`
-	ForceBuild bool   `yaml:"force_build"`
-	PushLatest bool   `yaml:"push_latest"`
+	Name       string   `yaml:"name"`
+	From       string   `yaml:"from"`
+	Tag        string   `yaml:"tag"`
+	Depend     string   `yaml:"depend"`
+	PreBuild   string   `yaml:"pre_build"`
+	PostBuild  string   `yaml:"post_build"`
+	ForceBuild bool     `yaml:"force_build"`
+	PushLatest bool     `yaml:"push_latest"`
+	Platforms  []string `yaml:"platforms"`
 }
 
 type credentialConfig struct {
@@ -108,6 +110,7 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 			dirty:      false,
 			forceBuild: buildNodeConfig.ForceBuild,
 			pushLatest: buildNodeConfig.PushLatest,
+			platforms:  buildNodeConfig.Platforms,
 		}
 		buildTree.allNodes[node.name] = node
 	}
@@ -481,14 +484,14 @@ func (t *BuildTree) pushNodeAndChildren(node *buildNode) error {
 		utils.Info2("====> Skipping %s", node.name)
 	} else {
 		utils.Info2("====> Pushing %s:%s", node.name, node.tag)
-		err := utils.DockerPush(node.name, node.tag)
+		err := utils.DockerPush(node.name, node.tag, node.buildRoot, node.platforms)
 		if err != nil {
 			return err
 		}
 		if node.pushLatest {
 			latestTag := "latest"
 			utils.Info2("====> Pushing %s:%s", node.name, latestTag)
-			err := utils.DockerPush(node.name, latestTag)
+			err := utils.DockerPush(node.name, latestTag, node.buildRoot, node.platforms)
 			if err != nil {
 				return err
 			}

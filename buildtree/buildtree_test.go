@@ -37,6 +37,9 @@ build:
     post_build: "./finalize.sh"
     force_build: true
     push_latest: true
+    platforms:
+      - linux/amd64
+      - linux/arm64
 credentials:
   - name: gcr.io
     registry: "https://gcr.io/v2/"
@@ -72,6 +75,7 @@ credentials:
 			PostBuild:  "./finalize.sh",
 			ForceBuild: true,
 			PushLatest: true,
+			Platforms:  []string{"linux/amd64", "linux/arm64"},
 		},
 	}
 	require.Equal(s.T(), expectedBuilds, buildConfig.Build)
