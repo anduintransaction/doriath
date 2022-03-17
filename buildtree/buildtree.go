@@ -2,6 +2,7 @@ package buildtree
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -283,6 +284,41 @@ func (t *BuildTree) FindLatestTag(name string) (string, error) {
 		Registry: credential.Registry,
 		Password: credential.Password,
 	})
+}
+
+func (t *BuildTree) WaitImageExist(name string, timeout time.Duration, interval time.Duration) error {
+	imageInfo, err := utils.ExtractDockerImageInfo(name)
+	if err != nil {
+		return err
+	}
+	credential := t.credentials[imageInfo.RegistryName]
+	if credential == nil {
+		return stacktrace.Propagate(ErrMissingCredential{imageInfo.RegistryName}, "Cannot find credential for %s", imageInfo.RegistryName)
+	}
+	checkExistFn := func() bool {
+		exist, err := utils.DockerCheckTagExists(imageInfo.ShortName, imageInfo.Tag, &utils.DockerCredential{
+			Username: credential.Username,
+			Registry: credential.Registry,
+			Password: credential.Password,
+		})
+		if err != nil {
+			return false
+		}
+		return exist
+	}
+
+	start := time.Now()
+	timeoutMSec := timeout.Microseconds()
+	for !checkExistFn() {
+		if time.Since(start).Microseconds() > timeoutMSec {
+			return errors.New("timeout exceeded")
+		}
+
+		utils.Info("Waiting for image to exists...")
+		time.Sleep(interval)
+	}
+
+	return nil
 }
 
 // Clean .
