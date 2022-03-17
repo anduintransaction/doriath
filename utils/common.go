@@ -13,7 +13,7 @@ import (
 
 // Version returns doriath version
 func Version() string {
-	return "1.5.0"
+	return "1.5.1"
 }
 
 // ResolveDir appends a path to a rootDir
