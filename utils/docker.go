@@ -34,9 +34,10 @@ type DockerImageInfo struct {
 
 // DockerCredential holds credential information for a docker registry request
 type DockerCredential struct {
-	Registry string
-	Username string
-	Password string
+	Registry  string
+	Username  string
+	Password  string
+	HTTPToken string
 }
 
 type dockerAuthInfo struct {
@@ -80,8 +81,13 @@ func ExtractDockerImageInfo(fullnameWithTag string) (*DockerImageInfo, error) {
 	if len(segments) > 3 {
 		return nil, stacktrace.NewError("Invalid image full name: %q", fullnameWithTag)
 	} else if len(segments) < 3 {
-		imageInfo.RegistryName = DefaultRegistryName
-		imageInfo.ShortName = imageInfo.FullName
+		if strings.Contains(segments[0], ".") {
+			imageInfo.RegistryName = segments[0]
+			imageInfo.ShortName = strings.Join(segments[1:], "/")
+		} else {
+			imageInfo.RegistryName = DefaultRegistryName
+			imageInfo.ShortName = imageInfo.FullName
+		}
 	} else {
 		imageInfo.RegistryName = segments[0]
 		imageInfo.ShortName = strings.Join(segments[1:], "/")
@@ -113,15 +119,23 @@ func ExtractParentImageFromDockerfile(filename string) (*DockerImageInfo, error)
 
 // DockerCheckTagExists checks if a tag exists on registry or not
 func DockerCheckTagExists(shortName, tag string, credential *DockerCredential) (bool, error) {
-	authInfo, err := dockerCheckTagFirstRequest(shortName, credential)
-	if err != nil {
-		return false, err
+	var token string
+	var authType string
+	if credential.HTTPToken != "" {
+		token = credential.HTTPToken
+		authType = "Basic"
+	} else {
+		authInfo, err := dockerCheckTagFirstRequest(shortName, credential)
+		if err != nil {
+			return false, err
+		}
+		token, err = dockerRequestToken(shortName, authInfo, credential)
+		if err != nil {
+			return false, err
+		}
+		authType = authInfo.authType
 	}
-	token, err := dockerRequestToken(shortName, authInfo, credential)
-	if err != nil {
-		return false, err
-	}
-	return dockerCheckTagSecondRequest(shortName, tag, authInfo.authType, token, credential)
+	return dockerCheckTagSecondRequest(shortName, tag, authType, token, credential)
 }
 
 // DockerImageExistsOnLocal .
@@ -223,15 +237,24 @@ func DockerFindLatestTag(imageInfo *DockerImageInfo, credential *DockerCredentia
 }
 
 func dockerFindGCRLatestTag(imageInfo *DockerImageInfo, credential *DockerCredential) (string, error) {
-	authInfo, err := dockerCheckTagFirstRequest(imageInfo.ShortName, credential)
-	if err != nil {
-		return "", err
+	var token string
+	var authType string
+	if credential.HTTPToken != "" {
+		token = credential.HTTPToken
+		authType = "Basic"
+	} else {
+		authInfo, err := dockerCheckTagFirstRequest(imageInfo.ShortName, credential)
+		if err != nil {
+			return "", err
+		}
+		token, err = dockerRequestToken(imageInfo.ShortName, authInfo, credential)
+		if err != nil {
+			return "", err
+		}
+		authType = authInfo.authType
 	}
-	token, err := dockerRequestToken(imageInfo.ShortName, authInfo, credential)
-	if err != nil {
-		return "", err
-	}
-	return dockerFindLatestTag(imageInfo, authInfo.authType, token, credential)
+
+	return dockerFindLatestTag(imageInfo, authType, token, credential)
 }
 
 func getTagListURL(shortName string, credential *DockerCredential) string {
