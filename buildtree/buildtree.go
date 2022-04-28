@@ -66,6 +66,7 @@ type credentialConfig struct {
 	Username     string `yaml:"username"`
 	Password     string `yaml:"password"`
 	PasswordFile string `yaml:"password_file"`
+	HTTPToken    string `yaml:"http_token"`
 }
 
 // ReadBuildTree reads a build tree from reader
@@ -280,9 +281,10 @@ func (t *BuildTree) FindLatestTag(name string) (string, error) {
 		return "", stacktrace.Propagate(ErrMissingCredential{imageInfo.RegistryName}, "Cannot find credential for %s", imageInfo.RegistryName)
 	}
 	return utils.DockerFindLatestTag(imageInfo, &utils.DockerCredential{
-		Username: credential.Username,
-		Registry: credential.Registry,
-		Password: credential.Password,
+		Username:  credential.Username,
+		Registry:  credential.Registry,
+		Password:  credential.Password,
+		HTTPToken: credential.HTTPToken,
 	})
 }
 
@@ -297,11 +299,13 @@ func (t *BuildTree) WaitImageExist(name string, timeout time.Duration, interval 
 	}
 	checkExistFn := func() bool {
 		exist, err := utils.DockerCheckTagExists(imageInfo.ShortName, imageInfo.Tag, &utils.DockerCredential{
-			Username: credential.Username,
-			Registry: credential.Registry,
-			Password: credential.Password,
+			Username:  credential.Username,
+			Registry:  credential.Registry,
+			Password:  credential.Password,
+			HTTPToken: credential.HTTPToken,
 		})
 		if err != nil {
+			utils.Error(err)
 			return false
 		}
 		return exist
@@ -400,9 +404,10 @@ func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty, parentIsForced bo
 			return stacktrace.Propagate(ErrMissingCredential{imageInfo.RegistryName}, "Cannot find credential for %s", imageInfo.RegistryName)
 		}
 		tagExists, err := utils.DockerCheckTagExists(imageInfo.ShortName, node.tag, &utils.DockerCredential{
-			Registry: credential.Registry,
-			Username: credential.Username,
-			Password: credential.Password,
+			Registry:  credential.Registry,
+			Username:  credential.Username,
+			Password:  credential.Password,
+			HTTPToken: credential.HTTPToken,
 		})
 		if err != nil {
 			return err
