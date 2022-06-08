@@ -42,6 +42,10 @@ type buildNode struct {
 	platforms  []string
 }
 
+func (n buildNode) PullableName() string {
+	return utils.FormatDockerName(n.name)
+}
+
 func (n buildNode) DisplayName() string {
 	ret := fmt.Sprintf("%s:%s", n.name, n.tag)
 	if n.alias != "" {
@@ -120,10 +124,10 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 	for _, buildNodeConfig := range buildConfig.Build {
 		node := &buildNode{
 			buildRoot:  utils.ResolveDir(buildTree.rootDir, buildNodeConfig.From),
-			name:       utils.FormatDockerName(buildNodeConfig.Name),
+			name:       buildNodeConfig.Name,
 			alias:      buildNodeConfig.Alias,
 			tag:        buildNodeConfig.Tag,
-			depend:     utils.FormatDockerName(buildNodeConfig.Depend),
+			depend:     buildNodeConfig.Depend,
 			preBuild:   buildNodeConfig.PreBuild,
 			postBuild:  buildNodeConfig.PostBuild,
 			children:   []*buildNode{},
@@ -370,13 +374,13 @@ func (t *BuildTree) Clean() {
 	for _, node := range t.allNodes {
 		if node.buildRoot != "provided" {
 			utils.Info("====> Removing docker image %s:%s", node.name, node.tag)
-			err := utils.DockerTryRMI(node.name, node.tag)
+			err := utils.DockerTryRMI(node.PullableName(), node.tag)
 			if err != nil {
 				utils.Error(err)
 			}
 			if node.pushLatest {
 				utils.Info("====> Removing docker image %s:%s", node.name, "latest")
-				err = utils.DockerTryRMI(node.name, "latest")
+				err = utils.DockerTryRMI(node.PullableName(), "latest")
 				if err != nil {
 					utils.Error(err)
 				}
@@ -422,7 +426,7 @@ func (t *BuildTree) assertDockerfile(node *buildNode) error {
 		return err
 	}
 	dependentNode := t.allNodes[node.depend]
-	if !utils.CompareDockerName(dependentNode.name, imageInfo.FullName) {
+	if !utils.CompareDockerName(dependentNode.PullableName(), imageInfo.FullName) {
 		return stacktrace.Propagate(ErrMismatchDependencyImage{node.name, node.depend, imageInfo.FullName}, "Mismatch dependency for %q: %q in config but got %q in dockerfile", node.name, node.depend, imageInfo.FullName)
 	}
 	parentTag := dependentNode.tag
@@ -433,11 +437,11 @@ func (t *BuildTree) assertDockerfile(node *buildNode) error {
 }
 
 func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty, parentIsForced bool) error {
-	if parentIsForced || node.forceBuild == true {
+	if parentIsForced || node.forceBuild {
 		node.forceBuild = true
 		node.dirty = true
 	} else {
-		imageInfo, err := utils.ExtractDockerImageInfo(node.name)
+		imageInfo, err := utils.ExtractDockerImageInfo(node.PullableName())
 		if err != nil {
 			return err
 		}
@@ -524,7 +528,7 @@ func (t *BuildTree) tryBuildNodeAndChildren(node *buildNode) error {
 			return err
 		}
 		utils.Info2("====> Removing %s:%s", node.name, randomTag)
-		err = utils.DockerRMI(node.name, randomTag)
+		err = utils.DockerRMI(node.PullableName(), randomTag)
 		if err != nil {
 			utils.Error(err)
 		}
@@ -545,7 +549,7 @@ func (t *BuildTree) buildNode(node *buildNode, tag string) error {
 			return err
 		}
 	}
-	err := utils.DockerBuild(node.name, tag, node.buildRoot)
+	err := utils.DockerBuild(node.PullableName(), tag, node.buildRoot)
 	if node.postBuild != "" {
 		utils.RunShellCommand(t.resolveShellCommandPath(t.rootDir, node.postBuild))
 	}
@@ -567,14 +571,14 @@ func (t *BuildTree) pushNodeAndChildren(node *buildNode) error {
 		utils.Info2("====> Skipping %s", node.name)
 	} else {
 		utils.Info2("====> Pushing %s:%s", node.name, node.tag)
-		err := utils.DockerPush(node.name, node.tag, node.buildRoot, node.platforms)
+		err := utils.DockerPush(node.PullableName(), node.tag, node.buildRoot, node.platforms)
 		if err != nil {
 			return err
 		}
 		if node.pushLatest {
 			latestTag := "latest"
 			utils.Info2("====> Pushing %s:%s", node.name, latestTag)
-			err := utils.DockerPush(node.name, latestTag, node.buildRoot, node.platforms)
+			err := utils.DockerPush(node.PullableName(), latestTag, node.buildRoot, node.platforms)
 			if err != nil {
 				return err
 			}
