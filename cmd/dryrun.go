@@ -28,7 +28,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var dryrunNoColor = false
+var (
+	dryrunNoColor       = false
+	printSkipDirtyCheck = false
+)
 
 // dryrunCmd represents the dryrun command
 var dryrunCmd = &cobra.Command{
@@ -41,7 +44,11 @@ var dryrunCmd = &cobra.Command{
 			utils.Error(err)
 			os.Exit(1)
 		}
-		err = t.Prepare()
+		opts := []buildtree.PrepareOptFn{}
+		if printSkipDirtyCheck {
+			opts = append(opts, buildtree.SkipDirtyCheck())
+		}
+		err = t.Prepare(opts...)
 		if err != nil {
 			utils.Error(err)
 			os.Exit(1)
@@ -52,5 +59,6 @@ var dryrunCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(dryrunCmd)
+	dryrunCmd.Flags().BoolVar(&printSkipDirtyCheck, "skip-check", false, "Skip dirty check")
 	dryrunCmd.Flags().BoolVarP(&dryrunNoColor, "no-color", "c", false, "No color output")
 }

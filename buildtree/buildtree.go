@@ -30,6 +30,7 @@ type BuildTree struct {
 type buildNode struct {
 	buildRoot  string
 	name       string
+	alias      string
 	tag        string
 	depend     string
 	preBuild   string
@@ -41,6 +42,21 @@ type buildNode struct {
 	platforms  []string
 }
 
+func (n buildNode) DisplayName() string {
+	ret := fmt.Sprintf("%s:%s", n.name, n.tag)
+	if n.alias != "" {
+		ret = fmt.Sprintf("%s[%s]", ret, n.alias)
+	}
+	return ret
+}
+
+func (n buildNode) GetNameOrAlias() string {
+	if n.alias != "" {
+		return n.alias
+	}
+	return n.name
+}
+
 type config struct {
 	RootDir     string              `yaml:"root_dir"`
 	Pull        []string            `yaml:"pull"`
@@ -50,6 +66,7 @@ type config struct {
 
 type buildNodeConfig struct {
 	Name       string   `yaml:"name"`
+	Alias      string   `yaml:"alias"`
 	From       string   `yaml:"from"`
 	Tag        string   `yaml:"tag"`
 	Depend     string   `yaml:"depend"`
@@ -104,6 +121,7 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 		node := &buildNode{
 			buildRoot:  utils.ResolveDir(buildTree.rootDir, buildNodeConfig.From),
 			name:       utils.FormatDockerName(buildNodeConfig.Name),
+			alias:      buildNodeConfig.Alias,
 			tag:        buildNodeConfig.Tag,
 			depend:     utils.FormatDockerName(buildNodeConfig.Depend),
 			preBuild:   buildNodeConfig.PreBuild,
@@ -114,7 +132,7 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 			pushLatest: buildNodeConfig.PushLatest,
 			platforms:  buildNodeConfig.Platforms,
 		}
-		buildTree.allNodes[node.name] = node
+		buildTree.allNodes[node.GetNameOrAlias()] = node
 	}
 	for _, credential := range buildConfig.Credentials {
 		resolvedCredential, err := resolveCredential(credential, buildTree.rootDir)
@@ -171,7 +189,25 @@ func resolveCredential(credential *credentialConfig, rootDir string) (*credentia
 }
 
 // Prepare checks the build tree for error and produces build steps
-func (t *BuildTree) Prepare() error {
+type prepareOpt struct {
+	skipDirtyCheck bool
+}
+
+type PrepareOptFn func(opt *prepareOpt)
+
+func SkipDirtyCheck() PrepareOptFn {
+	return func(opt *prepareOpt) {
+		opt.skipDirtyCheck = true
+	}
+}
+
+func (t *BuildTree) Prepare(optFns ...PrepareOptFn) error {
+	// build option
+	opt := new(prepareOpt)
+	for _, fn := range optFns {
+		fn(opt)
+	}
+
 	for _, node := range t.allNodes {
 		if node.depend == "" {
 			t.rootNodes = append(t.rootNodes, node)
@@ -194,12 +230,16 @@ func (t *BuildTree) Prepare() error {
 			return err
 		}
 	}
-	for _, node := range t.rootNodes {
-		err := t.dirtyCheck(node, false, false)
-		if err != nil {
-			return err
+
+	if !opt.skipDirtyCheck {
+		for _, node := range t.rootNodes {
+			err := t.dirtyCheck(node, false, false)
+			if err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 
@@ -356,10 +396,11 @@ func (t *BuildTree) cyclicCheck(node *buildNode) error {
 	nodes := make(utils.StringSet)
 	current := node
 	for {
-		if nodes.Exists(current.name) {
-			return stacktrace.Propagate(ErrCyclicDependency{current.name}, "Cyclic dependency found for %q", current.name)
+		nameId := current.GetNameOrAlias()
+		if nodes.Exists(nameId) {
+			return stacktrace.Propagate(ErrCyclicDependency{nameId}, "Cyclic dependency found for %q", nameId)
 		}
-		nodes.Add(current.name)
+		nodes.Add(nameId)
 		if current.depend == "" {
 			return nil
 		}
@@ -380,10 +421,11 @@ func (t *BuildTree) assertDockerfile(node *buildNode) error {
 	if err != nil {
 		return err
 	}
-	if !utils.CompareDockerName(node.depend, imageInfo.FullName) {
+	dependentNode := t.allNodes[node.depend]
+	if !utils.CompareDockerName(dependentNode.name, imageInfo.FullName) {
 		return stacktrace.Propagate(ErrMismatchDependencyImage{node.name, node.depend, imageInfo.FullName}, "Mismatch dependency for %q: %q in config but got %q in dockerfile", node.name, node.depend, imageInfo.FullName)
 	}
-	parentTag := t.allNodes[node.depend].tag
+	parentTag := dependentNode.tag
 	if parentTag != imageInfo.Tag {
 		return stacktrace.Propagate(ErrMismatchDependencyTag{node.name, node.depend, parentTag, imageInfo.Tag}, "Mismatch dependency image tag for %q (parent is %q): %q in config but got %q in dockerfile", node.name, node.depend, parentTag, imageInfo.Tag)
 	}
@@ -559,7 +601,7 @@ func (t *BuildTree) printTree(node *buildNode, level int, noColor bool) {
 			dirtySuffix = "\033[0m"
 		}
 	}
-	fmt.Printf("%s%s %s:%s%s%s\n", dirtyPrefix, prefix, node.name, node.tag, dirtyMark, dirtySuffix)
+	fmt.Printf("%s%s %s%s%s\n", dirtyPrefix, prefix, node.DisplayName(), dirtyMark, dirtySuffix)
 	for _, child := range node.children {
 		t.printTree(child, level+1, noColor)
 	}
