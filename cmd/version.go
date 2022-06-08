@@ -33,7 +33,7 @@ var versionCmd = &cobra.Command{
 	Short: "Display doriath version",
 	Long:  `Display doriath version`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(utils.Version())
+		fmt.Println(utils.FullVersion())
 	},
 }
 

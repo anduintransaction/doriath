@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,9 +12,15 @@ import (
 	"github.com/palantir/stacktrace"
 )
 
-// Version returns doriath version
-func Version() string {
-	return "1.5.3"
+var (
+	// Version returns doriath version
+	Version = "dev"
+	// Commit returns doriath build commit
+	Commit = "unknown"
+)
+
+func FullVersion() string {
+	return fmt.Sprintf("%s (Commit: %s)", Version, Commit)
 }
 
 // ResolveDir appends a path to a rootDir
