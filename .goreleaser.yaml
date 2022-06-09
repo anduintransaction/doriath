@@ -1,0 +1,30 @@
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - id: doriath
+    dir: ./
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/anduintransaction/doriath/utils.Version={{.Version}} -X github.com/anduintransaction/doriath/utils.Commit={{.Commit}}
+archives:
+  - id: doriath
+    builds:
+      - doriath
+    name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: tar.gz
+    files:
+      - none*
+changelog:
+  skip: true
+checksum:
+  name_template: "checksums.txt"
+snapshot:
+  name_template: "dev-snapshot"

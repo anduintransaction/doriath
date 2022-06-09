@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+var skipTestDirtyCheck = []PrepareOptFn{SkipDirtyCheck()}
+
 type BuildTreeTestSuite struct {
 	suite.Suite
 	resourceFolder string
@@ -61,12 +63,12 @@ credentials:
 	require.Nil(s.T(), err, "read build config should be successful")
 	require.Equal(s.T(), ".", buildConfig.RootDir)
 	expectedBuilds := []*buildNodeConfig{
-		&buildNodeConfig{
+		{
 			Name: "ubuntu",
 			Tag:  "16.04",
 			From: "provided",
 		},
-		&buildNodeConfig{
+		{
 			Name:       "human/aragorn",
 			Tag:        "3.1.4",
 			From:       "./human/aragorn",
@@ -85,13 +87,13 @@ credentials:
 		buildConfig.Credentials[i] = resolvedCredential
 	}
 	expectedCredentials := []*credentialConfig{
-		&credentialConfig{
+		{
 			Name:     "gcr.io",
 			Registry: "https://gcr.io/v2/",
 			Username: "username",
 			Password: "testpassword",
 		},
-		&credentialConfig{
+		{
 			Name:         "dockerhub",
 			Username:     "username",
 			Password:     "rivendell",
@@ -194,6 +196,33 @@ func (s *BuildTreeTestSuite) TestCyclicCheck() {
 	err = buildTree.Prepare()
 	_, ok := stacktrace.RootCause(err).(ErrCyclicDependency)
 	require.True(s.T(), ok)
+}
+
+func (s *BuildTreeTestSuite) TestCyclicOnAliasCheck() {
+	rootFolder := filepath.Join(s.resourceFolder, "cyclic-alias")
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{}, nil)
+	require.Nil(s.T(), err, "build tree must be readable")
+	err = buildTree.Prepare()
+	_, ok := stacktrace.RootCause(err).(ErrCyclicDependency)
+	require.True(s.T(), ok)
+}
+
+func (s *BuildTreeTestSuite) TestDependOnAlias() {
+	rootFolder := filepath.Join(s.resourceFolder, "depend-alias")
+	buildTree, err := ReadBuildTreeFromFile(filepath.Join(rootFolder, "doriath.yml"), map[string]string{}, nil)
+	require.Nil(s.T(), err, "build tree must be readable")
+	err = buildTree.Prepare(skipTestDirtyCheck...)
+	require.Nil(s.T(), err, "build tree must be able to be prepared")
+	require.Equal(s.T(), 1, len(buildTree.rootNodes), "build tree must have only 1 root node")
+	expectedRootNode := &buildNodeForTestData{
+		buildRoot:  "provided",
+		name:       "ubuntu",
+		tag:        "16.04",
+		children:   []string{"node1"},
+		dirty:      false,
+		forceBuild: false,
+	}
+	require.Equal(s.T(), expectedRootNode, s.convertNodeToTestData(buildTree.rootNodes[0]))
 }
 
 func (s *BuildTreeTestSuite) TestMismatchImage() {

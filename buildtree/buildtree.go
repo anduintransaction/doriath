@@ -30,6 +30,7 @@ type BuildTree struct {
 type buildNode struct {
 	buildRoot  string
 	name       string
+	alias      string
 	tag        string
 	depend     string
 	preBuild   string
@@ -41,6 +42,25 @@ type buildNode struct {
 	platforms  []string
 }
 
+func (n buildNode) PullableName() string {
+	return utils.FormatDockerName(n.name)
+}
+
+func (n buildNode) DisplayName() string {
+	ret := fmt.Sprintf("%s:%s", n.name, n.tag)
+	if n.alias != "" {
+		ret = fmt.Sprintf("%s[%s]", ret, n.alias)
+	}
+	return ret
+}
+
+func (n buildNode) GetNameOrAlias() string {
+	if n.alias != "" {
+		return n.alias
+	}
+	return n.name
+}
+
 type config struct {
 	RootDir     string              `yaml:"root_dir"`
 	Pull        []string            `yaml:"pull"`
@@ -50,6 +70,7 @@ type config struct {
 
 type buildNodeConfig struct {
 	Name       string   `yaml:"name"`
+	Alias      string   `yaml:"alias"`
 	From       string   `yaml:"from"`
 	Tag        string   `yaml:"tag"`
 	Depend     string   `yaml:"depend"`
@@ -103,9 +124,10 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 	for _, buildNodeConfig := range buildConfig.Build {
 		node := &buildNode{
 			buildRoot:  utils.ResolveDir(buildTree.rootDir, buildNodeConfig.From),
-			name:       utils.FormatDockerName(buildNodeConfig.Name),
+			name:       buildNodeConfig.Name,
+			alias:      buildNodeConfig.Alias,
 			tag:        buildNodeConfig.Tag,
-			depend:     utils.FormatDockerName(buildNodeConfig.Depend),
+			depend:     buildNodeConfig.Depend,
 			preBuild:   buildNodeConfig.PreBuild,
 			postBuild:  buildNodeConfig.PostBuild,
 			children:   []*buildNode{},
@@ -114,7 +136,7 @@ func readBuildTree(configFilePath string, fileContent []byte, variableMap map[st
 			pushLatest: buildNodeConfig.PushLatest,
 			platforms:  buildNodeConfig.Platforms,
 		}
-		buildTree.allNodes[node.name] = node
+		buildTree.allNodes[node.GetNameOrAlias()] = node
 	}
 	for _, credential := range buildConfig.Credentials {
 		resolvedCredential, err := resolveCredential(credential, buildTree.rootDir)
@@ -171,7 +193,25 @@ func resolveCredential(credential *credentialConfig, rootDir string) (*credentia
 }
 
 // Prepare checks the build tree for error and produces build steps
-func (t *BuildTree) Prepare() error {
+type prepareOpt struct {
+	skipDirtyCheck bool
+}
+
+type PrepareOptFn func(opt *prepareOpt)
+
+func SkipDirtyCheck() PrepareOptFn {
+	return func(opt *prepareOpt) {
+		opt.skipDirtyCheck = true
+	}
+}
+
+func (t *BuildTree) Prepare(optFns ...PrepareOptFn) error {
+	// build option
+	opt := new(prepareOpt)
+	for _, fn := range optFns {
+		fn(opt)
+	}
+
 	for _, node := range t.allNodes {
 		if node.depend == "" {
 			t.rootNodes = append(t.rootNodes, node)
@@ -194,12 +234,16 @@ func (t *BuildTree) Prepare() error {
 			return err
 		}
 	}
-	for _, node := range t.rootNodes {
-		err := t.dirtyCheck(node, false, false)
-		if err != nil {
-			return err
+
+	if !opt.skipDirtyCheck {
+		for _, node := range t.rootNodes {
+			err := t.dirtyCheck(node, false, false)
+			if err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 
@@ -330,13 +374,13 @@ func (t *BuildTree) Clean() {
 	for _, node := range t.allNodes {
 		if node.buildRoot != "provided" {
 			utils.Info("====> Removing docker image %s:%s", node.name, node.tag)
-			err := utils.DockerTryRMI(node.name, node.tag)
+			err := utils.DockerTryRMI(node.PullableName(), node.tag)
 			if err != nil {
 				utils.Error(err)
 			}
 			if node.pushLatest {
 				utils.Info("====> Removing docker image %s:%s", node.name, "latest")
-				err = utils.DockerTryRMI(node.name, "latest")
+				err = utils.DockerTryRMI(node.PullableName(), "latest")
 				if err != nil {
 					utils.Error(err)
 				}
@@ -356,10 +400,11 @@ func (t *BuildTree) cyclicCheck(node *buildNode) error {
 	nodes := make(utils.StringSet)
 	current := node
 	for {
-		if nodes.Exists(current.name) {
-			return stacktrace.Propagate(ErrCyclicDependency{current.name}, "Cyclic dependency found for %q", current.name)
+		nameId := current.GetNameOrAlias()
+		if nodes.Exists(nameId) {
+			return stacktrace.Propagate(ErrCyclicDependency{nameId}, "Cyclic dependency found for %q", nameId)
 		}
-		nodes.Add(current.name)
+		nodes.Add(nameId)
 		if current.depend == "" {
 			return nil
 		}
@@ -380,10 +425,11 @@ func (t *BuildTree) assertDockerfile(node *buildNode) error {
 	if err != nil {
 		return err
 	}
-	if !utils.CompareDockerName(node.depend, imageInfo.FullName) {
+	dependentNode := t.allNodes[node.depend]
+	if !utils.CompareDockerName(dependentNode.PullableName(), imageInfo.FullName) {
 		return stacktrace.Propagate(ErrMismatchDependencyImage{node.name, node.depend, imageInfo.FullName}, "Mismatch dependency for %q: %q in config but got %q in dockerfile", node.name, node.depend, imageInfo.FullName)
 	}
-	parentTag := t.allNodes[node.depend].tag
+	parentTag := dependentNode.tag
 	if parentTag != imageInfo.Tag {
 		return stacktrace.Propagate(ErrMismatchDependencyTag{node.name, node.depend, parentTag, imageInfo.Tag}, "Mismatch dependency image tag for %q (parent is %q): %q in config but got %q in dockerfile", node.name, node.depend, parentTag, imageInfo.Tag)
 	}
@@ -391,11 +437,11 @@ func (t *BuildTree) assertDockerfile(node *buildNode) error {
 }
 
 func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty, parentIsForced bool) error {
-	if parentIsForced || node.forceBuild == true {
+	if parentIsForced || node.forceBuild {
 		node.forceBuild = true
 		node.dirty = true
 	} else {
-		imageInfo, err := utils.ExtractDockerImageInfo(node.name)
+		imageInfo, err := utils.ExtractDockerImageInfo(node.PullableName())
 		if err != nil {
 			return err
 		}
@@ -482,7 +528,7 @@ func (t *BuildTree) tryBuildNodeAndChildren(node *buildNode) error {
 			return err
 		}
 		utils.Info2("====> Removing %s:%s", node.name, randomTag)
-		err = utils.DockerRMI(node.name, randomTag)
+		err = utils.DockerRMI(node.PullableName(), randomTag)
 		if err != nil {
 			utils.Error(err)
 		}
@@ -503,7 +549,7 @@ func (t *BuildTree) buildNode(node *buildNode, tag string) error {
 			return err
 		}
 	}
-	err := utils.DockerBuild(node.name, tag, node.buildRoot)
+	err := utils.DockerBuild(node.PullableName(), tag, node.buildRoot)
 	if node.postBuild != "" {
 		utils.RunShellCommand(t.resolveShellCommandPath(t.rootDir, node.postBuild))
 	}
@@ -525,14 +571,14 @@ func (t *BuildTree) pushNodeAndChildren(node *buildNode) error {
 		utils.Info2("====> Skipping %s", node.name)
 	} else {
 		utils.Info2("====> Pushing %s:%s", node.name, node.tag)
-		err := utils.DockerPush(node.name, node.tag, node.buildRoot, node.platforms)
+		err := utils.DockerPush(node.PullableName(), node.tag, node.buildRoot, node.platforms)
 		if err != nil {
 			return err
 		}
 		if node.pushLatest {
 			latestTag := "latest"
 			utils.Info2("====> Pushing %s:%s", node.name, latestTag)
-			err := utils.DockerPush(node.name, latestTag, node.buildRoot, node.platforms)
+			err := utils.DockerPush(node.PullableName(), latestTag, node.buildRoot, node.platforms)
 			if err != nil {
 				return err
 			}
@@ -559,7 +605,7 @@ func (t *BuildTree) printTree(node *buildNode, level int, noColor bool) {
 			dirtySuffix = "\033[0m"
 		}
 	}
-	fmt.Printf("%s%s %s:%s%s%s\n", dirtyPrefix, prefix, node.name, node.tag, dirtyMark, dirtySuffix)
+	fmt.Printf("%s%s %s%s%s\n", dirtyPrefix, prefix, node.DisplayName(), dirtyMark, dirtySuffix)
 	for _, child := range node.children {
 		t.printTree(child, level+1, noColor)
 	}
