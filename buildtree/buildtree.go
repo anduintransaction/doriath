@@ -437,6 +437,7 @@ func (t *BuildTree) assertDockerfile(node *buildNode) error {
 }
 
 func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty, parentIsForced bool) error {
+	utils.Info("Dirty check node %s", node.DisplayName())
 	if parentIsForced || node.forceBuild {
 		node.forceBuild = true
 		node.dirty = true
