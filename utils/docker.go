@@ -34,10 +34,11 @@ type DockerImageInfo struct {
 
 // DockerCredential holds credential information for a docker registry request
 type DockerCredential struct {
-	Registry  string
-	Username  string
-	Password  string
-	HTTPToken string
+	Registry      string
+	Username      string
+	Password      string
+	HTTPToken     string
+	ChallengeType string
 }
 
 type dockerAuthInfo struct {
@@ -124,6 +125,9 @@ func DockerCheckTagExists(shortName, tag string, credential *DockerCredential) (
 	if credential.HTTPToken != "" {
 		token = credential.HTTPToken
 		authType = "Basic"
+		if credential.ChallengeType != "" {
+			authType = credential.ChallengeType
+		}
 	} else {
 		authInfo, err := dockerCheckTagFirstRequest(shortName, credential)
 		if err != nil {
@@ -242,6 +246,9 @@ func dockerFindGCRLatestTag(imageInfo *DockerImageInfo, credential *DockerCreden
 	if credential.HTTPToken != "" {
 		token = credential.HTTPToken
 		authType = "Basic"
+		if credential.ChallengeType != "" {
+			authType = credential.ChallengeType
+		}
 	} else {
 		authInfo, err := dockerCheckTagFirstRequest(imageInfo.ShortName, credential)
 		if err != nil {
