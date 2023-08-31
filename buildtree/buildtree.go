@@ -444,6 +444,8 @@ func (t *BuildTree) dirtyCheck(node *buildNode, parentIsDirty, parentIsForced bo
 	if parentIsForced || node.forceBuild {
 		node.forceBuild = true
 		node.dirty = true
+	} else if node.buildRoot == "provided" {
+		node.dirty = false
 	} else {
 		imageInfo, err := utils.ExtractDockerImageInfo(node.PullableName())
 		if err != nil {
