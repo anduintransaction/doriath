@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -174,6 +175,15 @@ func DockerBuild(name, tag, buildRoot string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return stacktrace.Propagate(cmd.Run(), "Cannot build docker image")
+}
+
+func DockerTagLatest(name, tag string) error {
+	origImg := fmt.Sprintf("%s:%s", name, tag)
+	latestImg := fmt.Sprintf("%s:latest", name)
+	cmd := exec.Command("docker", "tag", origImg, latestImg)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return stacktrace.Propagate(cmd.Run(), "Cannot tag docker image")
 }
 
 // DockerPull .

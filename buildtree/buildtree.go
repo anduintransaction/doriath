@@ -508,8 +508,8 @@ func (t *BuildTree) buildNodeAndChildren(node *buildNode) error {
 		}
 		if node.pushLatest {
 			latestTag := "latest"
-			utils.Info2("====> Building %s:%s", node.name, latestTag)
-			err = t.buildNode(node, latestTag)
+			utils.Info2("====> Tagging %s:%s", node.name, latestTag)
+			err = utils.DockerTagLatest(node.PullableName(), node.tag)
 			if err != nil {
 				return err
 			}
